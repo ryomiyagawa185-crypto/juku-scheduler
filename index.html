@@ -300,6 +300,13 @@
         <textarea id="tsvout" placeholder="ここに生成結果が表示されます" readonly></textarea>
       </div>
       <div class="card">
+        <h3>👨‍👩‍👧 生徒マスタ取込（マージ）</h3>
+        <p>生徒情報のJSON（例：保護者連絡先マスタ）を<b>名前で照合</b>して取り込みます。
+        既存の授業・希望時間帯はそのまま、空でない項目だけ更新。マスタにいない生徒は新規追加されます。</p>
+        <label style="display:inline-block"><button class="primary" onclick="document.getElementById('mergeFile').click()">JSONを選んで取込</button>
+          <input type="file" id="mergeFile" accept=".json" style="display:none"></label>
+      </div>
+      <div class="card">
         <h3>🔁 前の週からコピー</h3>
         <p>定期授業をそのまま来週に流し込みます。コピー元の週を選んで、表示中の週へ複製します（既存の授業がある枠はスキップ）。</p>
         <select id="copySrcWeek"></select>
@@ -1436,6 +1443,47 @@ $('btnTsv').onclick=async()=>{
 };
 
 /* ---------------- バックアップ・削除 ---------------- */
+/* 生徒マスタのマージ取込：名前で照合し、空でない項目のみ上書き（授業・希望は不変） */
+function mergeStudents(arr){
+  if(!Array.isArray(arr))throw new Error('JSONが配列ではありません');
+  let updated=0,created=0;
+  const fields=['grade','school','targetSchool','email','parentPhone','homePhone',
+    'studentPhone','address','parentName','note'];
+  arr.forEach(rec=>{
+    if(!rec||typeof rec.name!=='string'||!rec.name.trim())return;
+    const name=rec.name.trim();
+    let s=S.students.find(x=>x.name===name);
+    if(s){
+      let ch=false;
+      fields.forEach(k=>{
+        const v=typeof rec[k]==='string'?rec[k].trim():'';
+        if(v&&s[k]!==v){s[k]=v;ch=true}
+      });
+      if(ch)updated++;
+    }else{
+      s={id:uid(),name,grade:'',school:'',note:'',prefs:[],address:'',studentPhone:'',
+        parentName:'',parentPhone:'',email:'',homePhone:'',targetSchool:''};
+      fields.forEach(k=>{
+        const v=typeof rec[k]==='string'?rec[k].trim():'';
+        if(v)s[k]=v;
+      });
+      S.students.push(s);created++;
+    }
+  });
+  return {updated,created,total:arr.length};
+}
+$('mergeFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const res=mergeStudents(JSON.parse(r.result));
+      save();renderAll();
+      toast(`取込完了：更新${res.updated}名・新規${res.created}名（読込${res.total}件）`);
+    }catch(err){alert('取り込めませんでした：'+err.message)}
+  };
+  r.readAsText(f);e.target.value='';
+};
 $('btnExport').onclick=()=>{
   const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
   const a=el('a',{href:URL.createObjectURL(blob),download:'授業スケジューラ_backup.json'});
