@@ -1,0 +1,16 @@
+{
+  "name": "授業スケジューラ",
+  "short_name": "授業予定",
+  "description": "塾の授業スケジュール入力を自動化（週切替・入力補完・空き講師検索・振替期限管理）",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f5f7",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
