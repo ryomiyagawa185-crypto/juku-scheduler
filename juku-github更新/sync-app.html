@@ -175,6 +175,14 @@
   .chip{background:var(--accent-soft);border:1px solid #d5d9fb;border-radius:14px;
     padding:2px 10px;font-size:12px;display:inline-flex;gap:6px;align-items:center}
   .chip b{cursor:pointer;color:var(--sub)}
+  .dupbox{border:1px solid #f3c1c1;background:#fff7f0;border-radius:8px;padding:8px 10px;margin-bottom:10px}
+  .dupbox .duphead{font-size:12px;color:var(--danger);font-weight:600;margin:0 0 6px}
+  .dupbox .dupempty{font-size:12px;color:var(--sub);margin:0}
+  .dupline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;
+    padding:5px 0;border-top:1px dashed #e8c9c9}
+  .dupline:first-of-type{border-top:none}
+  .dupline .who{background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+  .dupsuggest{color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:2px}
 
   /* データ */
   .datagrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
@@ -332,6 +340,7 @@
       <div class="mbox">
         <h3>生徒（<span id="sCount"></span>名）
           <button id="btnRegStudent" class="primary small" style="margin-left:10px">＋ 新しい生徒を登録</button></h3>
+        <div class="dupbox" id="dupBox"></div>
         <table class="mtable" id="studentTable"></table>
         <h3 style="margin-top:18px">科目リスト（入力補完に使われます）</h3>
         <div class="subjectchips" id="subjectChips"></div>
@@ -1231,8 +1240,24 @@ function openLessonDlg(opt){
 function updateStudentInfo(){
   const name=$('fStudent').value.trim();
   const s=S.students.find(x=>x.name===name);
-  $('fStudentInfo').textContent=s?['✓ 登録済み',s.grade,s.school].filter(Boolean).join('　'):
-    (name?'※ 未登録の生徒 → 保存時にマスタへ自動追加します':'');
+  const info=$('fStudentInfo');
+  info.innerHTML='';
+  if(s){
+    info.textContent=['✓ 登録済み',s.grade,s.school].filter(Boolean).join('　');
+    return;
+  }
+  if(!name)return;
+  info.append(document.createTextNode('※ 未登録の生徒 → 保存時にマスタへ自動追加します'));
+  const cand=S.students.filter(x=>looksLikeDupName(name,x.name)).slice(0,3);
+  if(cand.length){
+    info.append(document.createTextNode('　もしかして: '));
+    cand.forEach((c,i)=>{
+      if(i>0)info.append(document.createTextNode('／'));
+      info.append(el('span',{class:'dupsuggest',
+        text:c.name+(c.grade?`（${c.grade}）`:''),
+        onclick:()=>{$('fStudent').value=c.name;updateStudentInfo();}}));
+    });
+  }
 }
 function collectWarnings(lesson){
   const warn=[];
@@ -1735,10 +1760,107 @@ $('btnReportCopy').onclick=async()=>{
   }
 };
 
+/* ---------------- 名寄せ（表記ゆれ重複検出・統合） ---------------- */
+// 生徒名の正規化キー：全角/半角の統一（NFKC）＋空白除去
+function nameNormKey(name){
+  return (name||'').normalize('NFKC').replace(/[\s　]/g,'');
+}
+function isKanaCh(c){return /[぀-ゟ゠-ヿー]/.test(c)}
+function isKanjiCh(c){return /[一-鿿㐀-䶿]/.test(c)}
+// 文字列がひらがな/カタカナ主体か漢字主体かを判定（'kana'|'kanji'|null＝判定不能）
+function scriptMajor(str){
+  const chars=[...str].filter(c=>isKanaCh(c)||isKanjiCh(c));
+  if(!chars.length)return null;
+  const kana=chars.filter(isKanaCh).length, kanji=chars.filter(isKanjiCh).length;
+  if(kana&&!kanji)return 'kana';
+  if(kanji&&!kana)return 'kanji';
+  return kana>=kanji?'kana':'kanji';
+}
+// 2つの生徒名が表記ゆれによる同一人物候補かどうか
+function looksLikeDupName(nameA,nameB){
+  const na=nameNormKey(nameA), nb=nameNormKey(nameB);
+  if(!na||!nb)return false;
+  if(na===nb)return true; // 正規化一致（完全同名含む）
+  // 姓一致：先頭2文字が一致し、残り（名）が異なる
+  if(na.length>=2&&nb.length>=2&&na.slice(0,2)===nb.slice(0,2)&&na.slice(2)!==nb.slice(2))return true;
+  // 先頭1文字一致＋片方がかな主体・もう片方が漢字主体（例：陳彦浩／陳やすひろ）
+  if(na.length>=2&&nb.length>=2&&na[0]===nb[0]){
+    const sa=scriptMajor(na.slice(1)), sb=scriptMajor(nb.slice(1));
+    if(sa&&sb&&sa!==sb)return true;
+  }
+  return false;
+}
+// 表記ゆれの疑いがある生徒ペアを列挙（重複なし・名前順で安定）
+function dupCandidates(){
+  const list=S.students;
+  const pairs=[];
+  for(let i=0;i<list.length;i++){
+    for(let j=i+1;j<list.length;j++){
+      const a=list[i], b=list[j];
+      if(looksLikeDupName(a.name,b.name)){
+        const [x,y]=a.name.localeCompare(b.name,'ja')<=0?[a,b]:[b,a];
+        pairs.push({a:x,b:y});
+      }
+    }
+  }
+  pairs.sort((p,q)=>p.a.name.localeCompare(q.a.name,'ja')||p.b.name.localeCompare(q.b.name,'ja'));
+  return pairs;
+}
+// 生徒の統合：removeId を keepId に一本化する（授業の付け替え・情報の補完）
+function mergeStudents(keepId,removeId){
+  const keep=studentById(keepId), remove=studentById(removeId);
+  if(!keep||!remove||keep.id===remove.id)return;
+  let n=0;
+  S.lessons.forEach(l=>{if(l.studentId===removeId){l.studentId=keepId;n++}});
+  keep.prefs=[...new Set([...(keep.prefs||[]),...(remove.prefs||[])])];
+  ['grade','school','address','studentPhone','parentName','parentPhone','email','homePhone','targetSchool']
+    .forEach(f=>{if(!keep[f]&&remove[f])keep[f]=remove[f]});
+  if(keep.note&&remove.note)keep.note=keep.note+' / '+remove.note;
+  else if(remove.note)keep.note=remove.note;
+  keep.note=(keep.note?keep.note+'　':'')+`（旧表記: ${remove.name}）`;
+  S.students=S.students.filter(x=>x.id!==removeId);
+  save();renderAll();
+  toast(`統合しました：${keep.name} ← ${remove.name}（授業${n}件を付け替え）`);
+}
+function openMergeConfirm(a,b){
+  const la=S.lessons.filter(l=>l.studentId===a.id).length;
+  const lb=S.lessons.filter(l=>l.studentId===b.id).length;
+  if(!confirm(`「${a.name}」と「${b.name}」を同一人物として統合しますか？\n`+
+    `（${a.name}：${[a.grade,a.school].filter(Boolean).join(' ')||'情報なし'}／授業${la}件）\n`+
+    `（${b.name}：${[b.grade,b.school].filter(Boolean).join(' ')||'情報なし'}／授業${lb}件）\n\n`+
+    `※ 統合すると元に戻せません（授業データの付け替え・情報の統合が行われます）`))return;
+  const keepA=confirm(`残す名前を選んでください。\n\nOK＝「${a.name}」を残す\nキャンセル＝「${b.name}」を残す`);
+  const keep=keepA?a:b, remove=keepA?b:a;
+  mergeStudents(keep.id,remove.id);
+}
+function renderDupBox(){
+  const box=$('dupBox'); if(!box)return;
+  box.innerHTML='';
+  const pairs=dupCandidates();
+  if(!pairs.length){
+    box.append(el('p',{class:'dupempty',text:'重複候補はありません。'}));
+    return;
+  }
+  box.append(el('p',{class:'duphead',text:`⚠ 同一人物の可能性がある生徒（${pairs.length}件）`}));
+  pairs.forEach(({a,b})=>{
+    const info=s=>{
+      const n=S.lessons.filter(l=>l.studentId===s.id).length;
+      return [s.name,s.grade,s.school,`授業${n}件`].filter(Boolean).join('　');
+    };
+    box.append(el('div',{class:'dupline'},
+      el('span',{class:'who',text:info(a)}),
+      el('span',{text:'⇔'}),
+      el('span',{class:'who',text:info(b)}),
+      el('button',{class:'small',text:'統合…',onclick:()=>openMergeConfirm(a,b)})
+    ));
+  });
+}
+
 /* ---------------- マスタ ---------------- */
 function renderMasters(){
   $('tCount').textContent=S.teachers.length;
   $('sCount').textContent=S.students.length;
+  renderDupBox();
   const tt=$('teacherTable');tt.innerHTML='';
   tt.append(el('tr',{},el('th',{text:'講師名'}),el('th',{text:'定休NG曜日'}),el('th',{text:'担当科目'}),el('th',{text:'メモ（空き時間など）'}),el('th')));
   teacherOrder().forEach(t=>{
