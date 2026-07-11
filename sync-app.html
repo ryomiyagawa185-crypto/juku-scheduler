@@ -51,6 +51,7 @@
   table.grid th.tname{background:#fafbfc;text-align:left;padding:8px;white-space:nowrap;
     position:sticky;left:0;min-width:96px;z-index:5}
   table.grid th.tname .note{display:block;font-size:10px;color:var(--sub);font-weight:normal;max-width:120px}
+  table.grid th.tname.daylesson{border-left:3px solid var(--accent)}
   .ngbtn{float:right;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px}
   .ngbtn.on{background:var(--danger);color:#fff;border-color:var(--danger)}
   .ngbtn.rinji{background:#0284c7;color:#fff;border-color:#0284c7}
@@ -1032,6 +1033,22 @@ function teacherOrder(){
   return S.teachers.slice().sort((a,b)=>
     rank(a)-rank(b)||(cnt[b.id]||0)-(cnt[a.id]||0)||a.name.localeCompare(b.name,'ja'));
 }
+// 時間割グリッド専用の表示順：pin→その日の授業有無→その日の稼働可否→その日の授業数→総授業数→名前
+function dayTeacherOrder(weekId,day){
+  const cnt={};S.lessons.forEach(l=>{cnt[l.teacherId]=(cnt[l.teacherId]||0)+1});
+  const dayCnt={};S.lessons.forEach(l=>{
+    if(l.weekId===weekId&&l.day===day)dayCnt[l.teacherId]=(dayCnt[l.teacherId]||0)+1});
+  const rank=t=>t.sortPin==='top'?0:(t.sortPin==='bottom'?2:1);
+  const hasLesson=t=>(dayCnt[t.id]||0)>0;
+  const canWork=t=>!isNg(weekId,day,t.id)||isRinji(weekId,day,t.id);
+  return S.teachers.slice().sort((a,b)=>
+    rank(a)-rank(b)
+    ||(hasLesson(b)?1:0)-(hasLesson(a)?1:0)
+    ||(canWork(b)?1:0)-(canWork(a)?1:0)
+    ||(dayCnt[b.id]||0)-(dayCnt[a.id]||0)
+    ||(cnt[b.id]||0)-(cnt[a.id]||0)
+    ||a.name.localeCompare(b.name,'ja'));
+}
 function sortedWeeks(){
   return S.weeks.slice().sort((a,b)=>(a.startDate||'9999').localeCompare(b.startDate||'9999'));
 }
@@ -1092,7 +1109,8 @@ function renderGrid(){
   thead.append(hr); tbl.append(thead);
   const tbody=el('tbody');
   const wTeach=new Set(S.lessons.filter(l=>l.weekId===w.id).map(l=>l.teacherId));
-  const rows=teacherOrder().filter(t=>
+  const dayTeach=new Set(S.lessons.filter(l=>l.weekId===w.id&&l.day===day).map(l=>l.teacherId));
+  const rows=dayTeacherOrder(w.id,day).filter(t=>
     !t.inactive||wTeach.has(t.id)||(w.startDate&&w.startDate<'2026-07-01'));
   rows.forEach(t=>{
     const tr=el('tr');
@@ -1104,7 +1122,7 @@ function renderGrid(){
       title:rinji?'この日は臨時稼働中（クリックで定休NGに戻す）'
         :(t.ngDays.includes(day)?'定休NGの日（クリックで臨時稼働に）':'この日のNGを切替'),
       onclick:ev=>{ev.stopPropagation();toggleNg(t.id)}});
-    const th=el('th',{class:'tname'},t.name,ngBtn);
+    const th=el('th',{class:'tname'+(dayTeach.has(t.id)?' daylesson':'')},t.name,ngBtn);
     if(t.note) th.append(el('span',{class:'note',text:t.note}));
     tr.append(th);
     S.slots.forEach(sl=>{
