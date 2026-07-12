@@ -1057,7 +1057,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.14.0';
+const APP_VER='2.14.1';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -3336,6 +3336,47 @@ $('mergeFile').onchange=e=>{
   };
   r.readAsText(f);e.target.value='';
 };
+// 退避データのgzip圧縮保存（Safari等の localStorage 容量制限対策）。CompressionStream非対応環境ではnull（無圧縮フォールバック）
+async function gzB64(str){
+  try{
+    if(typeof CompressionStream==='undefined')return null;
+    const cs=new CompressionStream('gzip');
+    const ab=await new Response(new Blob([str]).stream().pipeThrough(cs)).arrayBuffer();
+    const u=new Uint8Array(ab); let s=''; const CH=8192;
+    for(let i=0;i<u.length;i+=CH)s+=String.fromCharCode.apply(null,u.subarray(i,i+CH));
+    return btoa(s);
+  }catch(e){return null;}
+}
+async function gunzB64(b64){
+  try{
+    const bin=atob(b64); const u=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    const ds=new DecompressionStream('gzip');
+    const ab=await new Response(new Blob([u]).stream().pipeThrough(ds)).arrayBuffer();
+    return new TextDecoder().decode(ab);
+  }catch(e){return null;}
+}
+function pruneLoserBackups(keep){
+  try{const ks=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf(LS_KEY+'.loser.')===0)ks.push(k);}
+    ks.sort(); while(ks.length>keep){localStorage.removeItem(ks.shift());}
+  }catch(e){}
+}
+// 退避を1件保存：gzip圧縮→容量オーバー時は前版と古い退避を解放して再試行。全版共通の退避入口
+async function writeLoserBackup(side,device,stateJson){
+  const gz=await gzB64(stateJson);
+  const rec=gz?{side,device,at:new Date().toISOString(),gz:1,state:gz}
+              :{side,device,at:new Date().toISOString(),state:stateJson};
+  const payload=JSON.stringify(rec);
+  const key=LS_KEY+'.loser.'+Date.now();
+  pruneLoserBackups(4);
+  try{localStorage.setItem(key,payload);return true;}
+  catch(e){
+    try{localStorage.removeItem(LS_PREV);}catch(_){}
+    pruneLoserBackups(0);
+    try{localStorage.setItem(key,payload);return true;}
+    catch(e2){try{toast('この端末は保存容量が不足しており、退避を保存できませんでした')}catch(_){}return false;}
+  }
+}
 // 復旧箱：同期競合で退避した内容（LS_KEY+'.loser.*'）を一覧し、必要なら戻す
 function renderRecovery(){
   const card=$('recoveryCard'), list=$('recoveryList'); if(!card||!list)return;
@@ -3350,11 +3391,13 @@ function renderRecovery(){
       el('div',{},el('span',{class:'who',text:(o.side==='local'?'この端末':'相手')+'の退避'}),
         el('div',{class:'info',text:(o.device||'')+'　'+at})),
       el('div',{style:'display:flex;gap:6px'},
-        el('button',{class:'small primary',text:'この内容に戻す',onclick:()=>{
+        el('button',{class:'small primary',text:'この内容に戻す',onclick:async()=>{
           if(!o.state){toast('データがありません');return;}
           if(!confirm('この退避内容で現在のデータを置き換えます。今のデータは復旧用に自動退避します。よろしいですか？'))return;
-          try{localStorage.setItem(LS_KEY+'.loser.'+Date.now(),JSON.stringify({side:'local',device:'復元前',at:new Date().toISOString(),state:stateForUploadSafe()}))}catch(e){}
-          try{const ui=S.ui;S=JSON.parse(o.state);if(typeof applyMigrations==='function')applyMigrations();S.ui=ui;save();load();renderAll();applyDense();undoStack=[];redoStack=[];updateUndoBtn();toast('退避内容に戻しました')}catch(e){alert('復元に失敗しました：'+e.message)}
+          let stateStr=o.state;
+          if(o.gz){stateStr=await gunzB64(o.state); if(!stateStr){alert('復元に失敗しました（解凍エラー）');return;}}
+          await writeLoserBackup('local','復元前',stateForUploadSafe()); // 復元前に現データを退避（圧縮）
+          try{const ui=S.ui;S=JSON.parse(stateStr);if(typeof applyMigrations==='function')applyMigrations();S.ui=ui;save();load();renderAll();applyDense();undoStack=[];redoStack=[];updateUndoBtn();renderRecovery();toast('退避内容に戻しました')}catch(e){alert('復元に失敗しました：'+e.message)}
         }}),
         el('button',{class:'small danger',text:'削除',onclick:()=>{if(confirm('この退避データを削除しますか？')){localStorage.removeItem(k);renderRecovery();}}})));
     list.append(row);
