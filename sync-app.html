@@ -327,6 +327,35 @@
     background:var(--panel-2);border-radius:0 0 16px 16px}
   .stuinfo{font-size:11px;color:var(--ok);min-height:14px;font-weight:600}
 
+  /* ---------------- help manual ---------------- */
+  dialog#helpDlg{width:min(680px,96vw)}
+  #helpDlg .dlgbody.help{max-height:74vh;gap:2px}
+  .help .help-lead{font-size:13px;color:var(--sub);line-height:1.75;margin:0 0 6px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:11px 13px}
+  .help h4{font-size:14px;font-weight:700;color:var(--accent-ink);margin:16px 0 7px;
+    padding-bottom:5px;border-bottom:1px solid var(--line)}
+  .help ul{margin:6px 0;padding-left:20px}
+  .help ul li{font-size:13px;line-height:1.75;margin:3px 0;color:var(--ink)}
+  .help ul.help-tabs li,.help p{font-size:13px;line-height:1.75;color:var(--ink)}
+  .help b{font-weight:700}
+  .help .kbd{display:inline-block;font-size:11.5px;font-weight:600;background:#fff;color:var(--ink);
+    border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:var(--radius-xs);
+    padding:1px 7px;margin:0 1px;white-space:nowrap;vertical-align:1px}
+  .help .tag{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:1px 9px;
+    margin:1px 2px;border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+  .help .tag.t-振替{border-left-color:var(--warn);background:var(--warn-soft);color:#8a5200}
+  .help .tag.t-体験{border-left-color:var(--ok);background:var(--ok-soft);color:#0a6b4d}
+  .help .tag.t-初回{border-left-color:var(--info);background:var(--info-soft);color:#155e96}
+  .help .tag.t-講習{border-left-color:var(--violet);background:var(--violet-soft);color:#5a2fb0}
+  .help .tag.t-要振替{border-left-color:var(--danger);background:var(--danger-soft);color:#b02525}
+  .help .tag.t-仮{border-left:3px dashed #94a3b8;background:#f4f6fa;color:#556}
+  .help .help-warn{margin:16px 0 4px;background:var(--danger-soft);border:1px solid var(--danger-line);
+    border-radius:var(--radius-sm);padding:11px 14px}
+  .help .help-warn>b{color:#b02525;font-size:13.5px}
+  .help .help-warn ul{margin:6px 0 0}
+  .help .help-warn li{color:#7a2020}
+  #btnHelp{white-space:nowrap}
+
   /* ---------------- mobile ---------------- */
   @media(max-width:600px){
     header{padding:9px 12px}
@@ -360,6 +389,7 @@
     <button id="btnNextWeek" title="次の週へ">▶</button>
     <button id="btnNewWeek">＋ 新しい週</button>
     <button id="btnEditWeek" class="small" title="週の名前・開始日を変更">✎</button>
+    <button id="btnHelp" class="ghost small" title="使い方マニュアルを開く">❓ 使い方</button>
     <button id="btnQuickAdd" class="primary">＋ 授業を追加</button>
     <span class="syncbadge off" id="syncBadge">● 起動中…</span>
   </div>
@@ -533,6 +563,97 @@
   </section>
 </main>
 
+<!-- 使い方マニュアル（標準版） -->
+<dialog id="helpDlg">
+  <div class="dlghead">📖 使い方マニュアル（標準版）
+    <button class="ghost small" id="btnHelpClose" title="閉じる">✕</button></div>
+  <div class="dlgbody help">
+    <p class="help-lead">授業スケジューラの標準的な使い方です。データは自動保存され、インターネットが無くても動きます。困ったら右上の「使い方」からいつでもこの画面を開けます。</p>
+
+    <h4>🗂 全体像（6つのタブ）</h4>
+    <ul class="help-tabs">
+      <li><b>📅 時間割</b>：週ごと・曜日ごとの授業を入力／編集する中心画面</li>
+      <li><b>🔍 空きコマ検索</b>：曜日×時間帯で空いている講師を探す</li>
+      <li><b>🔄 振替・希望</b>：欠席の振替先や、生徒の希望に合う空きを探す</li>
+      <li><b>📄 予定表</b>：生徒別・講師別の予定表を作り、印刷／LINE用にコピー</li>
+      <li><b>👥 講師・生徒マスタ</b>：講師・生徒の登録、重複の名寄せ、希望時間帯の設定</li>
+      <li><b>💾 データ・書き出し</b>：バックアップ（JSON書き出し）と読み込み、マスタ取込</li>
+    </ul>
+
+    <h4>🗓 週を切り替える・増やす（ヘッダ左）</h4>
+    <ul>
+      <li><span class="kbd">◀</span> <span class="kbd">▶</span>：前後の週へ移動。中央のプルダウンでも直接選べます</li>
+      <li><span class="kbd">＋ 新しい週</span>：週を追加（既存の週からコピー作成も可）</li>
+      <li><span class="kbd">✎</span>：今見ている週の名前・開始日を変更</li>
+    </ul>
+
+    <h4>📅 ① 時間割タブ</h4>
+    <ul>
+      <li><b>曜日タブ</b>で月〜日を切り替えます。行＝講師、列＝時間帯です。</li>
+      <li><b>空きマスの「＋」をクリック</b>→その講師・時間帯に授業を追加。</li>
+      <li><b>授業カードをクリック</b>→内容の編集・削除。</li>
+      <li><b>凡例の色</b>＝授業の種別です：
+        <span class="tag t-normal">通常</span>
+        <span class="tag t-振替">振替</span>
+        <span class="tag t-体験">体験</span>
+        <span class="tag t-初回">初回</span>
+        <span class="tag t-講習">講習</span>
+        <span class="tag t-要振替">要振替</span>
+        <span class="tag t-仮">仮（変更あり得る予定）</span></li>
+      <li><b>講師名の横の「NG」</b>＝その日は稼働不可に切替（グレーの網掛け）。定休の日は「臨時」で例外的に稼働可へ。</li>
+      <li><b>❌ のマス</b>＝稼働時間外などで入力不可。クリックすると確認のうえ稼働可（＋）へ変更できます。</li>
+      <li><span class="kbd">▤ コンパクト／ゆったり</span>：行の高さを切替。コンパクトにすると一画面に多くの講師が並びます（設定は記憶されます）。</li>
+      <li>上部には <b>📌備忘</b>・<b>この日のNG</b>・<b>🔔振替期限アラート</b>が自動表示されます。</li>
+    </ul>
+
+    <h4>🔍 ② 空きコマ検索タブ</h4>
+    <ul>
+      <li>曜日・時間帯（任意で科目）を選び「空き講師を探す」。</li>
+      <li>結果は<b>空いている講師／授業あり／NG／この枠を希望している生徒</b>に色分けされ、「この枠に追加」からその場で授業を入れられます。</li>
+    </ul>
+
+    <h4>🔄 ③ 振替・希望タブ</h4>
+    <ul>
+      <li>授業を種別<b>「要振替」</b>で保存すると、ここに<b>期限が近い順</b>に並びます（期限＝欠席日から◯日以内、上部で変更可）。</li>
+      <li>「振替先を探す」で、生徒の希望時間帯×空き講師（元の講師を優先）から候補を提示。希望時間帯のみ／担当科目のみ／期限内のみで絞れます。</li>
+      <li>下段は振替に限らず、生徒の<b>希望曜日×時間帯</b>に合う空きを探せます（増コマ・曜日変更の相談用）。</li>
+    </ul>
+
+    <h4>📄 ④ 予定表タブ</h4>
+    <ul>
+      <li>出力の種類（<b>生徒別</b>＝保護者・生徒向け／<b>講師別</b>）、対象、開始月〜終了月を選び「予定表を作成」。</li>
+      <li><span class="kbd">🖨 印刷・PDF保存</span>／<span class="kbd">📋 文章をコピー</span>（LINE送信用）。</li>
+      <li>「要振替」「振替済」は予定表に載りません。<b>（仮）</b>は変更になり得る予定です。</li>
+    </ul>
+
+    <h4>👥 ⑤ 講師・生徒マスタタブ</h4>
+    <ul>
+      <li>講師・生徒の<b>登録・編集・削除</b>、担当科目や定休NG曜日、生徒の学年・学校・<b>希望時間帯</b>を設定。</li>
+      <li>同一人物の疑いがある生徒は<b>名寄せ候補</b>として表示され、「統合」または「別人」で整理できます。</li>
+    </ul>
+
+    <h4>💾 ⑥ データ・書き出しタブ</h4>
+    <ul>
+      <li><b>JSON書き出し</b>で全データをバックアップ。定期的な保存をおすすめします。</li>
+      <li><b>マスタ取込</b>で保護者・講師マスタをまとめて反映できます。</li>
+    </ul>
+
+    <h4>💡 保存について</h4>
+    <p>入力するたびに<b>自動保存</b>されます（このブラウザ内に保存）。別の端末・ブラウザには自動では引き継がれないため、移す時は「JSON書き出し→読み込み」を使います。</p>
+
+    <div class="help-warn">
+      <b>⚠ これだけは注意</b>
+      <ul>
+        <li><b>「全データを初期化」</b>：すべての入力が消えます。実行前に必ずJSON書き出しでバックアップを。</li>
+        <li><b>「JSON読み込み」</b>：今のデータを<b>丸ごと上書き</b>します（追加ではありません）。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="dlgfoot">
+    <button class="primary" id="btnHelpOk">とじる</button>
+  </div>
+</dialog>
+
 <!-- 授業ダイアログ -->
 <dialog id="lessonDlg">
   <form method="dialog" id="lessonForm">
@@ -684,7 +805,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.5.0';
+const APP_VER='2.6.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 let S=null;
@@ -2483,6 +2604,14 @@ function applyDense(){
 document.getElementById('btnDense').addEventListener('click',()=>{
   S.ui.dense=!S.ui.dense; save(); applyDense();
 });
+(function(){
+  const dlg=document.getElementById('helpDlg');
+  const open=()=>{try{dlg.showModal()}catch(e){dlg.setAttribute('open','')}};
+  const close=()=>dlg.close();
+  document.getElementById('btnHelp').addEventListener('click',open);
+  document.getElementById('btnHelpClose').addEventListener('click',close);
+  document.getElementById('btnHelpOk').addEventListener('click',close);
+})();
 function renderAll(){
   renderWeekBar();renderGrid();renderMasters();renderDatalists();renderSearchControls();renderSwap();
 }
