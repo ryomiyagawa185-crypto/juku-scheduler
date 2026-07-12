@@ -2,16 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#3355d1">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="授業予定">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<title>授業スケジューラ｜武蔵野個別指導塾</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>授業スケジューラ 同期版｜武蔵野個別指導塾</title>
 <style>
   :root{
     /* ---- base palette : 信頼感のある紺基調 ---- */
@@ -44,7 +36,7 @@
 
   /* ---------------- header ---------------- */
   header{background:rgba(255,255,255,.9);backdrop-filter:saturate(1.4) blur(8px);
-    border-bottom:1px solid var(--line);padding:calc(11px + env(safe-area-inset-top)) 18px 11px;
+    border-bottom:1px solid var(--line);padding:11px 18px;
     display:flex;flex-wrap:wrap;gap:12px;align-items:center;position:sticky;top:0;z-index:20;
     box-shadow:0 1px 0 rgba(20,30,55,.02),0 6px 18px -14px rgba(20,30,55,.35)}
   header h1{font-size:16.5px;margin:0 8px 0 0;white-space:nowrap;font-weight:700;letter-spacing:.2px;
@@ -244,6 +236,11 @@
   .alertbar{display:flex;gap:10px;align-items:center;background:var(--danger-soft);border:1px solid var(--danger-line);
     border-radius:var(--radius-sm);padding:8px 14px;margin:0 0 12px;font-size:13px;color:#b91c1c;font-weight:500}
   .alertbar:empty{display:none}
+  .syncbadge{font-size:12px;padding:4px 10px;border-radius:12px;white-space:nowrap}
+  .syncbadge.ok{background:#e8f7f1;color:#059669}
+  .syncbadge.pending{background:#fef6e7;color:#d97706}
+  .syncbadge.err{background:#fdecec;color:#dc2626}
+  .syncbadge.off{background:#f3f4f6;color:#6b7280}
   .noticebar{background:var(--warn-soft);border:1px solid #ead9a8;border-radius:var(--radius-sm);
     padding:8px 14px;margin:0 0 12px;font-size:13px;color:#7c5e10}
   .noticebar:empty{display:none}
@@ -394,6 +391,7 @@
     <button id="btnEditWeek" class="small" title="週の名前・開始日を変更">✎</button>
     <button id="btnHelp" class="ghost small" title="使い方マニュアルを開く">❓ 使い方</button>
     <button id="btnQuickAdd" class="primary">＋ 授業を追加</button>
+    <span class="syncbadge off" id="syncBadge">● 起動中…</span>
   </div>
 </header>
 
@@ -913,6 +911,9 @@ function defaultState(){
 /* ---------------- 永続化 ---------------- */
 function load(){
   try{const raw=localStorage.getItem(LS_KEY); if(raw) S=JSON.parse(raw);}catch(e){S=null}
+  applyMigrations();
+}
+function applyMigrations(){
   if(!S||!Array.isArray(S.weeks)||!S.weeks.length) S=defaultState();
   // 欠損のあるデータ（不完全なJSON読み込み等）でも起動できるよう全コレクションを補完
   if(!Array.isArray(S.teachers))S.teachers=[];
@@ -1087,10 +1088,111 @@ function load(){
   if(!S.ui) S.ui={weekId:S.weeks[0].id,day:0,tab:'grid'};
   if(!S.weeks.find(w=>w.id===S.ui.weekId)) S.ui.weekId=S.weeks[0].id;
 }
+/* ---------------- 同期エンジン（Google Apps Script連携） ---------------- */
+const hasGAS=()=>typeof google!=='undefined'&&google.script&&google.script.run;
+const META_KEY=LS_KEY+'.syncMeta';
+let remoteVersion=0, dirty=false, saving=false, saveTimer=null;
+const PASS_KEY=LS_KEY+'.syncPass';
+function getPass(){
+  let p='';
+  try{p=localStorage.getItem(PASS_KEY)||''}catch(e){}
+  if(!p){
+    p=prompt('同期の合言葉を入力してください（初めて使う場合は、スタッフ間で共有する合言葉をここで決めてください）')||'';
+    if(p){try{localStorage.setItem(PASS_KEY,p)}catch(e){}}
+  }
+  return p;
+}
+function badPass(){
+  try{localStorage.removeItem(PASS_KEY)}catch(e){}
+  setSync('err','合言葉が違います（画面を再読み込みして入力し直してください）');
+}
+function isAuthErr(e){return String((e&&e.message)||e).indexOf('AUTH')>=0}
+function loadMeta(){
+  try{const m=JSON.parse(localStorage.getItem(META_KEY)||'{}');
+    remoteVersion=Number(m.remoteVersion||0);dirty=!!m.dirty;}catch(e){}
+}
+function saveMeta(){
+  try{localStorage.setItem(META_KEY,JSON.stringify({remoteVersion,dirty}))}catch(e){}
+}
+function setSync(cls,msg){const b=$('syncBadge');if(!b)return;
+  b.className='syncbadge '+cls;b.textContent='● '+msg;b.title=msg;}
+function scheduleFlush(delay){clearTimeout(saveTimer);saveTimer=setTimeout(flushSave,delay==null?1500:delay)}
 function save(){
   try{localStorage.setItem(LS_KEY,JSON.stringify(S))}
-  catch(e){toast('⚠ 保存に失敗しました（容量不足の可能性）。「JSON書き出し」でバックアップしてください')}
+  catch(e){toast('⚠ この端末への保存に失敗しました（容量不足の可能性）')}
+  if(!hasGAS())return;
+  dirty=true;saveMeta();setSync('pending','保存待ち');
+  scheduleFlush();
 }
+function stateForUpload(){const {ui,...rest}=S;return JSON.stringify(rest)}
+function applyRemote(json){
+  const ui=S&&S.ui;
+  let parsed;try{parsed=JSON.parse(json)}catch(e){return}
+  S=parsed;applyMigrations();
+  if(ui)S.ui=ui;
+  if(!S.weeks.find(w=>w.id===S.ui.weekId)){S.ui.weekId=S.weeks[0].id;S.ui.day=0}
+  try{localStorage.setItem(LS_KEY,JSON.stringify(S))}catch(e){}
+  renderAll();
+}
+function flushSave(){
+  if(!dirty||saving||!hasGAS())return;
+  saving=true;dirty=false;setSync('pending','保存中…');
+  google.script.run
+    .withSuccessHandler(res=>{
+      saving=false;
+      if(res.ok){remoteVersion=res.version;saveMeta();if(dirty)flushSave();else setSync('ok','同期済み');}
+      else{
+        remoteVersion=res.version;saveMeta();
+        if(res.state)applyRemote(res.state);
+        setSync('ok','同期済み');
+        toast('⚠ 他の端末で更新があったため最新データを読み込みました。直前の変更は入り直してください');
+      }
+    })
+    .withFailureHandler(err=>{
+      saving=false;dirty=true;saveMeta();
+      if(isAuthErr(err)){badPass();return}
+      setSync('err','接続エラー（自動再試行します）');
+      scheduleFlush(10000);
+    })
+    .saveState(stateForUpload(),remoteVersion,getPass());
+}
+function pollRemote(){
+  if(!hasGAS()||saving)return;
+  if(dirty){flushSave();return}
+  if(document.querySelector('dialog[open]'))return;
+  google.script.run.withSuccessHandler(res=>{
+    if(res.version>remoteVersion){remoteVersion=res.version;saveMeta();if(res.state)applyRemote(res.state)}
+  }).withFailureHandler(err=>{if(isAuthErr(err))badPass()}).getState(remoteVersion,getPass());
+}
+function initSync(){
+  loadMeta();
+  if(!hasGAS()){setSync('off','この端末のみ（サーバー未接続）');return}
+  if(dirty){
+    setSync('pending','未送信の変更を送信中…');
+    flushSave();
+  }else{
+    setSync('pending','読み込み中…');
+    google.script.run.withSuccessHandler(res=>{
+      remoteVersion=res.version||0;saveMeta();
+      if(res.state){applyRemote(res.state);setSync('ok','同期済み')}
+      else{dirty=true;saveMeta();flushSave()}
+    }).withFailureHandler(err=>{
+      if(isAuthErr(err)){badPass();return}
+      setSync('err','接続エラー（再読み込みしてください）');
+    }).getState(-1,getPass());
+  }
+  setInterval(pollRemote,25000);
+}
+window.addEventListener('online',()=>{if(dirty)flushSave()});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'&&dirty&&hasGAS()){
+    clearTimeout(saveTimer);
+    try{google.script.run.saveState(stateForUpload(),remoteVersion,getPass())}catch(e){}
+  }
+});
+window.addEventListener('beforeunload',()=>{
+  if(dirty&&hasGAS()){try{google.script.run.saveState(stateForUpload(),remoteVersion,getPass())}catch(e){}}
+});
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
 
@@ -2513,11 +2615,8 @@ document.getElementById('btnDense').addEventListener('click',()=>{
 function renderAll(){
   renderWeekBar();renderGrid();renderMasters();renderDatalists();renderSearchControls();renderSwap();
 }
-load();renderAll();applyDense();
-$('appVer').textContent='v'+APP_VER+'（スマホ版）';
-if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
-}
+load();renderAll();applyDense();initSync();
+$('appVer').textContent='v'+APP_VER+'（同期版）';
 </script>
 </body>
 </html>
