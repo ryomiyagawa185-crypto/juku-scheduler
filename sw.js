@@ -1,5 +1,5 @@
 // 授業スケジューラ PWA サービスワーカー（オフライン対応・キャッシュ優先）
-const CACHE = 'juku-scheduler-v2.4.0';
+const CACHE = 'juku-scheduler-v2.5.0';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
