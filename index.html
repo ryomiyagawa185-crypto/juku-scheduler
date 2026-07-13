@@ -1135,7 +1135,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.16.0';
+const APP_VER='2.16.1';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1369,6 +1369,17 @@ function load(){
     const memo='陳やすひろ君：毎月、国語×2回・物理×2回を任意の日程で設定する（固定曜日なし）';
     if(!S.settings.notices.includes(memo))S.settings.notices.push(memo);
     S.settings.rules20260710c=true;
+  }
+  // ── 一回だけのデータ移行（2026-07-14）：松島の稼働曜日を出勤実績（月火水木金土日＝全曜日）に是正。
+  //    旧rules20260710cのngDays=[1,2,3,4,5,6]／「月曜のみ稼働」noteを打ち消す（実データ上、月曜に定期授業が19件あり＝月曜NGは誤り） ──
+  if(!S.settings.fixMatsushima20260714){
+    const mts=S.teachers.find(t=>t.name==='松島');
+    if(mts){
+      mts.ngDays=[];
+      mts.note=(mts.note||'').split(' / ').filter(x=>x.indexOf('月曜のみ稼働')<0).join(' / ');
+      if((mts.note||'').indexOf('出勤実績')<0)mts.note=[(mts.note||''),'出勤実績:月火水木金土日'].filter(Boolean).join(' / ');
+    }
+    S.settings.fixMatsushima20260714=true;
   }
   // ── 一回だけのデータ移行：全講師の基本時間帯ルール（9/5〜。月〜土は16:40〜のみ、例外：吉倉=平日18:20〜/土13:20〜、尾山=土15:00〜、浅井=既存ルール維持） ──
   if(!S.settings.rules20260710d){
