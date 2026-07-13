@@ -499,6 +499,7 @@
   <button data-tab="today">📱 今日</button>
   <button data-tab="search">🔍 空きコマ検索</button>
   <button data-tab="match">🎯 マッチング</button>
+  <button data-tab="plan">🗓 日程提案</button>
   <button data-tab="swap">🔄 振替・希望</button>
   <button data-tab="report">📄 予定表</button>
   <button data-tab="bulk">🔧 一括</button>
@@ -583,6 +584,45 @@
     </div>
     <div id="matchSummary" style="font-size:13px;color:var(--sub);margin:10px 0 4px"></div>
     <div id="matchResult"></div>
+  </section>
+
+  <!-- ============ 日程提案（夏期などをムラなく配置）============ -->
+  <section class="view" id="view-plan">
+    <h3 class="subhead">🗓 日程提案（期間全体にムラなく配置）</h3>
+    <p style="font-size:12px;color:var(--sub);margin:4px 0 10px">
+      生徒・科目・コマ数と、講師/生徒が「OKな曜日×時間帯」を入れると、既存授業・席数・講師の稼働を避けつつ、<b>期間全体に偏りなく（前半集中や特定時期への偏りを避けて）</b>コマ数分を選び、<b>「仮」</b>で置きます。下のボタンでまとめて本登録に変えられます。
+    </p>
+    <div class="matchbar">
+      <label>生徒<select id="pStudent"></select></label>
+      <label>科目<input type="text" id="pSubject" list="dlSubjects" placeholder="例：英語"></label>
+      <label>コマ数<input type="number" id="pCount" min="1" max="60" value="6" style="width:70px"></label>
+      <label>期間（開始週）<select id="pWeekFrom"></select></label>
+      <label>〜（終了週）<select id="pWeekTo"></select></label>
+    </div>
+    <div class="matchfilters">
+      <div class="mfblock">
+        <div class="mfhead">OKな曜日×時間帯（クリックで選択）</div>
+        <table id="pGrid" class="prefgrid"></table>
+        <div style="font-size:11px;color:var(--sub)">※朝2コマ（10:00・11:40）は夏の週のみ対象</div>
+      </div>
+      <div class="mfblock">
+        <div class="mfhead">講師（未選択＝科目担当の全講師）<button type="button" id="pTeachersNone" class="tiny">クリア</button></div>
+        <div id="pTeachers" class="chkwrap"></div>
+      </div>
+      <div class="mfblock">
+        <div class="mfhead">実行</div>
+        <button id="btnPlanPreview" class="primary" style="margin-top:6px">候補を作成</button>
+        <button id="btnPlanApply" style="margin-top:6px">この内容で「仮」登録</button>
+      </div>
+    </div>
+    <div id="planSummary" style="font-size:13px;color:var(--sub);margin:10px 0 4px"></div>
+    <div id="planResult"></div>
+    <div class="card" style="margin-top:14px">
+      <h3>✅ 仮の一括本登録</h3>
+      <p style="font-size:12px;color:var(--sub)">日程提案で「仮」登録した授業を、まとめて通常授業（本登録）に変えます。</p>
+      <div id="planCommitInfo" style="font-size:13px;margin:6px 0"></div>
+      <button id="btnPlanCommit" class="primary">仮を一括で本登録にする</button>
+    </div>
   </section>
 
   <!-- ============ 振替・希望 ============ -->
@@ -692,12 +732,14 @@
     <div class="masters">
       <div class="mbox">
         <h3>講師（<span id="tCount"></span>名）
-          <button id="btnRegTeacher" class="primary small" style="margin-left:10px">＋ 新しい講師を登録</button></h3>
+          <button id="btnRegTeacher" class="primary small" style="margin-left:10px">＋ 新しい講師を登録</button>
+          <button id="btnSubjAudit" class="small" style="margin-left:6px">🧑‍🏫 担当科目を実績で点検</button></h3>
         <table class="mtable" id="teacherTable"></table>
       </div>
       <div class="mbox">
         <h3>生徒（<span id="sCount"></span>名）
-          <button id="btnRegStudent" class="primary small" style="margin-left:10px">＋ 新しい生徒を登録</button></h3>
+          <button id="btnRegStudent" class="primary small" style="margin-left:10px">＋ 新しい生徒を登録</button>
+          <button id="btnHandover" class="small" style="margin-left:6px">📋 引き継ぎ表を作る</button></h3>
         <div class="dupbox" id="dupBox"></div>
         <table class="mtable" id="studentTable"></table>
         <h3 style="margin-top:18px">科目リスト（入力補完に使われます）</h3>
@@ -725,7 +767,7 @@
         <h3>👨‍👩‍👧 生徒・講師マスタ取込（マージ）</h3>
         <p>生徒・講師情報のJSON（例：保護者連絡先マスタ・講師メアド）を<b>名前で照合</b>して取り込みます。
         既存の授業・希望時間帯はそのまま、空でない項目だけ更新。いない人は新規追加されます。</p>
-        <label style="display:inline-block"><button class="primary" onclick="document.getElementById('mergeFile').click()">JSONを選んで取込</button>
+        <label style="display:inline-block"><button class="primary" onclick="document.getElementById('mergeFile').click()">マスタだけ取込（授業は変えない）</button>
           <input type="file" id="mergeFile" accept=".json" style="display:none"></label>
       </div>
       <div class="card">
@@ -737,9 +779,16 @@
       <div class="card">
         <h3>💾 バックアップ</h3>
         <p>全データ（週・授業・マスタ）をJSONファイルに保存／復元します。データはこのブラウザ内に自動保存されています。</p>
-        <button id="btnExport">JSON書き出し</button>
-        <label style="display:inline-block"><button onclick="document.getElementById('importFile').click()">JSON読み込み</button>
+        <button id="btnExport">JSON書き出し（バックアップ保存）</button>
+        <label style="display:inline-block"><button class="danger" onclick="document.getElementById('importFile').click()">⚠ 全データを置き換え（復元）</button>
           <input type="file" id="importFile" accept=".json" style="display:none"></label>
+        <p style="font-size:11px;color:var(--sub);margin-top:6px">※取込用JSON（授業や備忘を反映するファイル）は、こちらの「全データを置き換え」で読み込みます。上の「マスタだけ取込」ではありません。</p>
+      </div>
+      <div class="card">
+        <h3>🔍 二重予約・席超過の監査</h3>
+        <p style="font-size:12px;color:var(--sub)">取込済みの全データを走査し、同じ枠に同一生徒が二重、または席上限（<span id="auditCap"></span>名）超過がないか点検します（配置時チェックをすり抜けた既存重複を検出）。</p>
+        <button id="btnAudit">二重予約を監査する</button>
+        <div id="auditResult" style="margin-top:8px"></div>
       </div>
       <div class="card">
         <h3>🗑 削除</h3>
@@ -980,6 +1029,35 @@
 </dialog>
 
 <!-- 同期の競合ダイアログ（同期版のみ使用。ローカル版では開かれない） -->
+<dialog id="handoverDlg">
+  <div class="dlghead"><span>📋 授業引き継ぎ表（LINE用）</span></div>
+  <div class="dlgbody" style="gap:8px">
+    <label>生徒 <select id="hoStudent"></select></label>
+    <label>引き継ぎ元（現担当・科目） <select id="hoCurTeacher"></select></label>
+    <label>新しい担当（交代/代行先） <select id="hoTeacher"></select></label>
+    <div style="display:flex;gap:14px;align-items:center;font-size:13px">
+      <label style="flex-direction:row;gap:4px;align-items:center;font-weight:normal"><input type="radio" name="hoMode" value="kotai" checked style="width:auto">交代（担当変更）</label>
+      <label style="flex-direction:row;gap:4px;align-items:center;font-weight:normal"><input type="radio" name="hoMode" value="daiko" style="width:auto">代行（一時）</label>
+    </div>
+    <button id="hoGen" class="primary">引き継ぎ表を作る</button>
+    <textarea id="hoText" style="width:100%;min-height:220px;font-size:12px" placeholder="「引き継ぎ表を作る」を押すと生成されます"></textarea>
+    <p style="font-size:11px;color:var(--sub)">※「直近の学習内容」欄はGmailの授業報告からClaudeが記入できます（宮川に依頼）。連絡先は含みません。送信は人が行ってください。</p>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;padding:8px">
+    <button id="hoCopy" class="primary">📋 コピー（LINE用）</button>
+    <button onclick="document.getElementById('handoverDlg').close()">閉じる</button>
+  </div>
+</dialog>
+<dialog id="subjAuditDlg">
+  <div class="dlghead"><span>🧑‍🏫 担当科目を実績で点検（追加のみ／削除は参考）</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:70vh;overflow:auto"><div id="subjAuditBox"></div></div>
+  <div style="text-align:right;padding:8px"><button onclick="document.getElementById('subjAuditDlg').close()">閉じる</button></div>
+</dialog>
+<dialog id="taskDlg">
+  <div class="dlghead"><span>🗂 未処理案件（二重予約・席超過の仕分け）</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:70vh;overflow:auto"><div id="taskInbox"></div></div>
+  <div style="text-align:right;padding:8px"><button onclick="document.getElementById('taskDlg').close()">閉じる</button></div>
+</dialog>
 <dialog id="conflictDlg">
   <div class="dlghead"><span>⚠ 別の端末で先に変更されました</span></div>
   <div class="dlgbody" style="gap:10px">
@@ -1057,7 +1135,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.14.1';
+const APP_VER='2.16.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1401,7 +1479,7 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show')
 
 /* ---------------- 変更履歴（Undo）：スナップショット方式・メモリ内のみ（localStorage/GAS同期に干渉しない） ---------------- */
 let undoStack=[], redoStack=[];
-const UNDO_COLS=['lessons','holds','students','teachers','ngOverrides','slotOverrides','subjects'];
+const UNDO_COLS=['lessons','holds','students','teachers','ngOverrides','slotOverrides','subjects','weeks'];
 function snapshotState(){const o={};UNDO_COLS.forEach(k=>o[k]=JSON.parse(JSON.stringify(S[k]||[])));return o;}
 // 変更前に呼ぶ：現在の状態（授業・仮押さえ・生徒/講師マスタ・NG設定）を退避。新規変更はRedoを無効化
 function pushUndo(label){undoStack.push({label:label||'変更',state:snapshotState()});if(undoStack.length>20)undoStack.shift();redoStack=[];updateUndoBtn();}
@@ -1470,6 +1548,12 @@ function setHold(weekId,day,slotId,teacherId,label){
 }
 function clearHold(weekId,day,slotId,teacherId){
   S.holds=(S.holds||[]).filter(h=>!(h.weekId===weekId&&h.day===day&&h.slotId===slotId&&h.teacherId===teacherId));
+}
+function reconcileHolds(){ // 授業が入っている枠の仮押さえを掃除（同期/一括取込は clearHold を通らないため stale hold が残る）
+  if(!Array.isArray(S.holds)||!Array.isArray(S.lessons))return 0; // lessons欠損データでも落ちない
+  const before=S.holds.length;
+  S.holds=S.holds.filter(h=>!lessonAt(h.weekId,h.day,h.slotId,h.teacherId));
+  return before-S.holds.length;
 }
 // 同じ日時（週×曜日×コマ）に組まれている実生徒数（席数上限の判定用）
 function occupancyAt(weekId,day,slotId,excludeLessonId){
@@ -1638,6 +1722,7 @@ function renderGrid(){
     .filter(Boolean).join('　／　');
   const nb=$('noticeBar');nb.innerHTML='';
   (S.settings.notices||[]).forEach(n=>nb.append(el('div',{text:'📌 備忘：'+n})));
+  {const _t=getOpenTasks().length;nb.append(el('div',{class:'notice-task',style:'cursor:pointer;padding:2px 0;'+(_t?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openTaskInbox,text:'🗂 未処理案件：'+_t+'件（クリックで仕分け）'}));}
   const alert=$('gridDdlLine');alert.innerHTML='';
   let over=0,soon=0;
   S.lessons.filter(isActiveMakeup).forEach(l=>{
@@ -2128,6 +2213,7 @@ function runMatch(){
       for(const sl of slotsHere){
         // 生徒がその日時に既に授業 → その枠は不可
         if(lessonsAt(w.id,day,sl.id).some(l=>l.studentId===stu.id))continue;
+        if(occupancyAt(w.id,day,sl.id)>=STUDIO_CAP)continue; // 教室が満席(7/7)の時間帯は候補に出さない
         if(onlyPref&&!(stu.prefs||[]).includes(prefKey(day,sl.id)))continue;
         for(const t of teachers){
           if(t.inactive)continue;
@@ -2180,6 +2266,120 @@ function gotoAndAdd(weekId,day,slotId,teacherId,studentName,subject){
 }
 $('btnMatch').onclick=runMatch;
 
+/* ---------------- 日程提案（要望7：期間全体にムラなく配置）---------------- */
+let planOK=new Set();     // 'day-slotId' のOK枠（講師・生徒とも空いている曜日×時間帯）
+let planPreview=null;     // 直近の選定結果
+function planMsg(html){$('planSummary').innerHTML=html;}
+function renderPlanControls(){
+  const ws=sortedWeeks();
+  const actStu=S.students.filter(isActiveStudent).sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  fillSelect($('pStudent'),actStu.map(s=>({value:s.id,text:s.name+(s.grade?'（'+s.grade+'）':'')})),actStu[0]&&actStu[0].id);
+  const wopts=ws.map(w=>({value:w.id,text:w.name+(w.startDate?'（'+w.startDate.slice(5)+'〜）':'')}));
+  fillSelect($('pWeekFrom'),wopts,S.ui.weekId);
+  fillSelect($('pWeekTo'),wopts,ws.length?ws[ws.length-1].id:S.ui.weekId);
+  const tc=$('pTeachers');tc.innerHTML='';
+  teacherOrder().filter(t=>!t.inactive).forEach(t=>{
+    tc.append(el('label',{class:'chk'},el('input',{type:'checkbox',value:t.id}),
+      el('span',{text:t.name+(t.subjects&&t.subjects.length?'（'+t.subjects.join('・')+'）':'')})));
+  });
+  renderPlanGrid();renderPlanCommitInfo();
+}
+function renderPlanGrid(){
+  const t=$('pGrid');t.innerHTML='';
+  const hr=el('tr',{},el('th',{text:''}));DAYS.forEach(d=>hr.append(el('th',{text:d})));t.append(hr);
+  SLOT_MASTER.forEach(sl=>{
+    const tr=el('tr',{},el('th',{text:sl.label}));
+    DAYS.forEach((d,i)=>{
+      const k=i+'-'+sl.id, on=planOK.has(k);
+      tr.append(el('td',{class:on?'on':'',style:'cursor:pointer;text-align:center'+(on?';background:var(--accent-soft);font-weight:700':''),
+        text:on?'OK':'',onclick:()=>{on?planOK.delete(k):planOK.add(k);renderPlanGrid();}}));
+    });
+    t.append(tr);
+  });
+}
+function renderPlanCommitInfo(){
+  const n=S.lessons.filter(l=>l.status==='仮'&&l.memo==='日程提案').length;
+  $('planCommitInfo').textContent=n?('日程提案の仮登録：'+n+'件（本登録待ち）'):'日程提案の仮登録はありません。';
+  $('btnPlanCommit').disabled=!n;
+}
+// 期間全体に均等になるよう候補からn件を選ぶ（前半集中・特定週への偏りを避ける）
+function pickEvenPlan(cands,n){
+  if(cands.length<=n)return cands.slice();
+  const lo=cands[0].wi, hi=cands[cands.length-1].wi, picked=[], usedWeek=new Set(), usedDay=new Set();
+  for(let b=0;b<n;b++){
+    const center=lo+((hi-lo)*(b+0.5)/n);
+    const pool=cands.filter(c=>picked.indexOf(c)<0).sort((a,b2)=>Math.abs(a.wi-center)-Math.abs(b2.wi-center));
+    const pick=pool.find(c=>!usedWeek.has(c.weekId)&&!usedDay.has(c.weekId+'-'+c.day))
+             ||pool.find(c=>!usedDay.has(c.weekId+'-'+c.day))||pool[0];
+    if(pick){picked.push(pick);usedWeek.add(pick.weekId);usedDay.add(pick.weekId+'-'+pick.day);}
+  }
+  return picked.sort((a,b)=>a.date-b.date);
+}
+function runPlanPreview(){
+  const stu=studentById($('pStudent').value), subj=$('pSubject').value.trim();
+  const count=Math.max(1,parseInt($('pCount').value,10)||0), ws=sortedWeeks();
+  const iFrom=ws.findIndex(w=>w.id===$('pWeekFrom').value), iTo=ws.findIndex(w=>w.id===$('pWeekTo').value);
+  const selT=Array.from($('pTeachers').querySelectorAll('input:checked')).map(c=>c.value);
+  if(!stu){planMsg('生徒を選んでください。');return}
+  if(iFrom<0||iTo<0){planMsg('期間の週を選んでください。');return}
+  if(!planOK.size){planMsg('OKな曜日×時間帯を1つ以上選んでください。');return}
+  const lo=Math.min(iFrom,iTo),hi=Math.max(iFrom,iTo);
+  const teachers=(selT.length?selT.map(teacherById).filter(Boolean):teacherOrder().filter(t=>!t.inactive));
+  const cands=[];
+  for(let i=lo;i<=hi;i++){
+    const w=ws[i];
+    for(const sl of weekSlots(w)){
+      for(let day=0;day<7;day++){
+        if(!planOK.has(day+'-'+sl.id))continue;
+        let best=null;
+        for(const t of teachers){
+          if(t.inactive)continue;
+          if(subj&&!subjectMatch(t,subj))continue;
+          if(placementIssues(w.id,day,sl.id,t.id,stu.id,null).length)continue;
+          best=t;break;
+        }
+        if(!best)continue;
+        const d=new Date(w.startDate+'T00:00:00');d.setDate(d.getDate()+day);
+        cands.push({weekId:w.id,wi:i,day,slotId:sl.id,slabel:sl.label,teacherId:best.id,tname:best.name,date:d});
+      }
+    }
+  }
+  if(!cands.length){planMsg('条件に合う空き枠がありませんでした。OK枠・講師・期間・科目をゆるめてください。');planPreview=null;$('planResult').innerHTML='';return}
+  cands.sort((a,b)=>a.date-b.date);
+  const picked=pickEvenPlan(cands,count);
+  planPreview={stuId:stu.id,subj,picked};
+  planMsg('<b>'+stu.name+'</b>さん：候補'+cands.length+'枠から、期間全体に均等な <b>'+picked.length+'</b> コマを選定'
+    +(picked.length<count?'（希望'+count+'に届かず。OK枠を増やすと増やせます）':'')+'。下の「仮登録」で置けます。');
+  const box=$('planResult');box.innerHTML='';
+  picked.forEach(c=>box.append(el('div',{class:'mrow'},
+    el('span',{class:'mslot',text:fmtDate(c.date)+'（'+DAYS[c.day]+'） '+c.slabel}),
+    el('span',{class:'who',text:c.tname+'先生'}),
+    el('span',{style:'color:var(--sub);font-size:12px',text:subj||'（科目未指定）'}))));
+}
+function applyPlan(){
+  if(!planPreview||!planPreview.picked||!planPreview.picked.length){toast('先に「候補を作成」してください');return}
+  const {stuId,subj,picked}=planPreview;
+  pushUndo('日程提案（仮登録）');
+  picked.forEach(c=>S.lessons.push({id:uid(),weekId:c.weekId,day:c.day,slotId:c.slotId,
+    teacherId:c.teacherId,studentId:stuId,subject:subj||'',status:'仮',memo:'日程提案'}));
+  save();renderAll();renderPlanCommitInfo();
+  toast(picked.length+'コマを「仮」で登録しました（時間割で確認→一括本登録できます）');
+  planPreview=null;$('planResult').innerHTML='';planMsg('「仮」で登録しました。下の「一括本登録」でまとめて確定できます。');
+}
+function commitPlanHolds(){
+  const t=S.lessons.filter(l=>l.status==='仮'&&l.memo==='日程提案');
+  if(!t.length){toast('日程提案の仮登録がありません');return}
+  if(!confirm('日程提案で仮登録した '+t.length+'件を、すべて通常授業（本登録）に変えます。よろしいですか？'))return;
+  pushUndo('仮を一括本登録');
+  t.forEach(l=>{l.status='通常';l.memo=''});
+  save();renderAll();renderPlanCommitInfo();
+  toast(t.length+'件を本登録にしました');
+}
+$('btnPlanPreview').onclick=runPlanPreview;
+$('btnPlanApply').onclick=applyPlan;
+$('btnPlanCommit').onclick=commitPlanHolds;
+$('pTeachersNone').onclick=()=>$('pTeachers').querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
+
 /* ---------------- 一括操作（曜日変更／季節講習生成）---------------- */
 // 配置の競合を既存ルールで判定（講師NG/講師別授業/生徒重複/席数超過）。excludeId=移動元自身は除外
 function placementIssues(weekId,day,slotId,teacherId,studentId,excludeId){
@@ -2192,6 +2392,265 @@ function placementIssues(weekId,day,slotId,teacherId,studentId,excludeId){
   if(!(busy&&busy.id!==excludeId))set.add(studentId);
   if(set.size>STUDIO_CAP)iss.push('席数超過');
   return iss;
+}
+// ── 既存データの二重予約・席超過を監査（placementIssuesは配置時のみのため、取込で入った既存重複を補完検出）──
+function auditDoubleBookings(){
+  const stuMap=new Map(), slotMap=new Map();
+  for(const l of S.lessons){
+    if(l.studentId==null)continue;
+    const wk=String(l.weekId), dy=String(l.day), sl=String(l.slotId), st=String(l.studentId);
+    const slotKey=wk+' '+dy+' '+sl, stuKey=slotKey+' '+st;
+    let g=stuMap.get(stuKey); if(!g){g={weekId:l.weekId,day:l.day,slotId:l.slotId,studentId:l.studentId,count:0,lessonIds:[]};stuMap.set(stuKey,g);}
+    g.count++; g.lessonIds.push(l.id);
+    let s=slotMap.get(slotKey); if(!s){s={weekId:l.weekId,day:l.day,slotId:l.slotId,students:new Set()};slotMap.set(slotKey,s);}
+    s.students.add(st);
+  }
+  const tMap=new Map();
+  for(const l of S.lessons){
+    if(l.teacherId==null)continue;
+    const k=String(l.weekId)+' '+String(l.day)+' '+String(l.slotId)+' T'+String(l.teacherId);
+    let g=tMap.get(k); if(!g){g={weekId:l.weekId,day:l.day,slotId:l.slotId,teacherId:l.teacherId,count:0,lessonIds:[]};tMap.set(k,g);}
+    g.count++; g.lessonIds.push(l.id);
+  }
+  const p2=x=>String(x).padStart(2,'0'), _now=new Date();
+  const todayISO=_now.getFullYear()+'-'+p2(_now.getMonth()+1)+'-'+p2(_now.getDate());
+  const lISO=l=>{const w=S.weeks.find(x=>x.id===l.weekId);if(!w||!w.startDate)return null;const dd=new Date(w.startDate+'T00:00:00');dd.setDate(dd.getDate()+Number(l.day));return dd.getFullYear()+'-'+p2(dd.getMonth()+1)+'-'+p2(dd.getDate());};
+  const teacherNG=[];
+  if(typeof slotBlocked==='function')for(const l of S.lessons){
+    if(l.teacherId==null)continue;
+    const iso=lISO(l); if(iso&&iso<todayISO)continue; // 過去は手が打てないため対象外
+    const rr=slotBlocked(l.weekId,l.day,l.teacherId,l.slotId);
+    if(rr)teacherNG.push({weekId:l.weekId,day:l.day,slotId:l.slotId,teacherId:l.teacherId,lessonId:l.id,reason:rr});
+  }
+  return {
+    studentDup:[...stuMap.values()].filter(x=>x.count>=2),
+    overCap:[...slotMap.values()].filter(x=>x.students.size>STUDIO_CAP).map(x=>({weekId:x.weekId,day:x.day,slotId:x.slotId,count:x.students.size})),
+    teacherDup:[...tMap.values()].filter(x=>x.count>=2),
+    teacherNG
+  };
+}
+function renderAuditReport(){
+  const box=$('auditResult'); if(!box)return;
+  const r=auditDoubleBookings();
+  const wk=id=>S.weeks.find(x=>x.id===id), wn=id=>{const w=wk(id);return w?w.name:'?';};
+  const sn=id=>{const s=S.students.find(x=>x.id===id);return s?s.name:'(不明)';};
+  const sl=id=>{const s=slotById(id);return s?s.label:'?';};
+  const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'?';};
+  const place=x=>`${wn(x.weekId)}・${DAYS[Number(x.day)]||x.day}曜・${sl(x.slotId)}`;
+  const byDate=(a,b)=>((wk(a.weekId)||{}).startDate||'').localeCompare((wk(b.weekId)||{}).startDate||'')||Number(a.day)-Number(b.day);
+  const tdup=r.teacherDup||[], tng=r.teacherNG||[];
+  box.textContent='';
+  if(!r.studentDup.length&&!r.overCap.length&&!tdup.length&&!tng.length){box.append(el('div',{text:'✅ 二重予約・席超過・講師NGはありません。',style:'color:var(--sub);font-size:13px'}));return;}
+  if(r.studentDup.length){
+    box.append(el('div',{text:`⚠ 生徒二重予約 ${r.studentDup.length}件`,style:'font-weight:600;color:var(--danger);margin-top:4px'}));
+    r.studentDup.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${sn(x.studentId)}｜${x.count}件`,style:'font-size:12px'})));
+  }
+  if(tdup.length){
+    box.append(el('div',{text:`⚠ 講師二重予約 ${tdup.length}件`,style:'font-weight:600;color:var(--danger);margin-top:8px'}));
+    tdup.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${tn(x.teacherId)}先生｜${x.count}件`,style:'font-size:12px'})));
+  }
+  if(tng.length){
+    box.append(el('div',{text:`⚠ 講師NG稼働（今日以降）${tng.length}件`,style:'font-weight:600;color:var(--danger);margin-top:8px'}));
+    tng.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${tn(x.teacherId)}先生（${x.reason}）`,style:'font-size:12px'})));
+  }
+  if(r.overCap.length){
+    box.append(el('div',{text:`⚠ 席超過（上限${STUDIO_CAP}名）${r.overCap.length}件`,style:'font-weight:600;color:var(--danger);margin-top:8px'}));
+    r.overCap.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${x.count}名`,style:'font-size:12px'})));
+  }
+}
+// ── 未処理案件（監査で検出した二重予約・席超過を「削除で解消／対応不要」で仕分ける）──
+function auditSig(kind,x){return kind+'|'+x.weekId+'|'+x.day+'|'+x.slotId+(x.studentId!=null?'|'+x.studentId:'');}
+function getOpenTasks(){
+  if(typeof auditDoubleBookings!=='function')return [];
+  const dismissed=new Set(S.settings&&S.settings.auditDismissed||[]);
+  const r=auditDoubleBookings(); const tasks=[];
+  const add=(kind,x,sig)=>{if(!dismissed.has(sig))tasks.push(Object.assign({sig,kind},x));};
+  r.studentDup.forEach(x=>add('dup',x,'dup|'+x.weekId+'|'+x.day+'|'+x.slotId+'|'+x.studentId));
+  (r.teacherDup||[]).forEach(x=>add('tdup',x,'tdup|'+x.weekId+'|'+x.day+'|'+x.slotId+'|'+x.teacherId));
+  (r.teacherNG||[]).forEach(x=>add('tng',x,'tng|'+x.weekId+'|'+x.day+'|'+x.slotId+'|'+x.teacherId));
+  r.overCap.forEach(x=>add('cap',x,'cap|'+x.weekId+'|'+x.day+'|'+x.slotId));
+  return tasks;
+}
+function dismissTask(sig){
+  if(!S.settings)S.settings={};
+  if(!Array.isArray(S.settings.auditDismissed))S.settings.auditDismissed=[];
+  if(!S.settings.auditDismissed.includes(sig)){pushUndo('未処理案件を対応不要に');S.settings.auditDismissed.push(sig);save();renderAll();renderTaskInbox();}
+}
+function undismissTask(sig){
+  pushUndo('対応不要を取り消し');
+  S.settings.auditDismissed=(S.settings.auditDismissed||[]).filter(s=>s!==sig);
+  save();renderAll();renderTaskInbox();
+}
+function resolveDeleteLesson(id){
+  if(!confirm('この予約を削除して二重を解消します。よろしいですか？（元に戻せます）'))return;
+  pushUndo('未処理案件：予約を削除');
+  S.lessons=S.lessons.filter(l=>l.id!==id);
+  save();renderAll();renderTaskInbox();
+}
+function renderTaskInbox(){
+  const box=$('taskInbox'); if(!box)return;
+  const tasks=getOpenTasks();
+  const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'?';};
+  const sn=id=>{const s=S.students.find(x=>x.id===id);return s?s.name:'(不明)';};
+  const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'?';};
+  const sl=id=>{const s=slotById(id);return s?s.label:'?';};
+  box.textContent='';
+  if(!tasks.length){box.append(el('div',{text:'✅ 未処理の二重予約・席超過はありません。',style:'color:var(--sub);padding:6px 0'}));}
+  const lesRow=l=>el('div',{style:'display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;margin-top:4px'},
+    el('span',{text:`・${tn(l.teacherId)}先生／${sn(l.studentId)}／${l.subject||''}${l.memo?'（'+l.memo+'）':''}`}),
+    el('button',{class:'small danger',text:'この予約を削除',onclick:()=>resolveDeleteLesson(l.id)}));
+  const sameSlot=(t,keyStu)=>S.lessons.filter(l=>String(l.weekId)===String(t.weekId)&&String(l.day)===String(t.day)&&String(l.slotId)===String(t.slotId)&&(keyStu?String(l.studentId)===String(t.studentId):String(l.teacherId)===String(t.teacherId)));
+  tasks.forEach(t=>{
+    const head=`${wn(t.weekId)}・${DAYS[Number(t.day)]||t.day}曜・${sl(t.slotId)}`;
+    const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px'});
+    if(t.kind==='dup'){
+      card.append(el('div',{text:`⚠ 生徒二重予約：${head}｜${sn(t.studentId)}（${t.count}件）`,style:'font-weight:600;color:var(--danger)'}));
+      sameSlot(t,true).forEach(l=>card.append(lesRow(l)));
+    }else if(t.kind==='tdup'){
+      card.append(el('div',{text:`⚠ 講師二重予約：${head}｜${tn(t.teacherId)}先生（${t.count}件・1対1不可）`,style:'font-weight:600;color:var(--danger)'}));
+      sameSlot(t,false).forEach(l=>card.append(lesRow(l)));
+    }else if(t.kind==='tng'){
+      card.append(el('div',{text:`⚠ 講師NG稼働：${head}｜${tn(t.teacherId)}先生（${t.reason}）`,style:'font-weight:600;color:var(--danger)'}));
+      const l=S.lessons.find(x=>x.id===t.lessonId); if(l)card.append(lesRow(l));
+      card.append(el('div',{text:'※ 臨時稼働なら時間割で⭕に切替、そうでなければ別講師/別日へ。',style:'font-size:11px;color:var(--sub);margin-top:3px'}));
+    }else{
+      card.append(el('div',{text:`⚠ 席超過：${head}｜${t.count}名（上限${STUDIO_CAP}名）`,style:'font-weight:600;color:var(--danger)'}));
+      card.append(el('div',{text:'※ この枠の生徒を別枠へ移すか、講習日程を分散してください。',style:'font-size:12px;margin-top:4px'}));
+    }
+    card.append(el('button',{class:'small',text:'対応不要にする',style:'margin-top:6px',onclick:()=>dismissTask(t.sig)}));
+    box.append(card);
+  });
+  const dz=(S.settings&&S.settings.auditDismissed)||[];
+  if(dz.length){
+    box.append(el('div',{text:`対応不要にした案件：${dz.length}件`,style:'font-size:12px;color:var(--sub);margin-top:10px;font-weight:600'}));
+    dz.forEach(sig=>box.append(el('div',{style:'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--sub);margin-top:2px'},
+      el('span',{text:sig.startsWith('dup')?'（二重予約）':'（席超過）'}),
+      el('button',{class:'small',text:'戻す',onclick:()=>undismissTask(sig)}))));
+  }
+}
+function openTaskInbox(){renderTaskInbox();const d=$('taskDlg');if(d&&d.showModal)d.showModal();}
+// ── 講師担当科目を実績で点検（追加のみ提案・削除は参考表示）──
+function normSubject(s){
+  if(!s)return null;
+  if(/英検|[０-９0-9一二三四五六七]級/.test(s))return '英検対策';
+  if(s.indexOf('英')>=0)return '英語';
+  if(/現代文|古文|漢文|国語|作文|小論/.test(s))return '国語';
+  if(/化学|物理|生物|理科|数理/.test(s))return '理科';
+  if(/世界史|日本史|地理|歴史|社会|公民/.test(s))return '社会';
+  if(s.indexOf('算数')>=0)return '算数';
+  if(s.indexOf('数')>=0)return '数学';
+  return null;
+}
+function teacherSubjectProfile(teacherId){
+  const c={};
+  S.lessons.forEach(l=>{if(l.teacherId!==teacherId)return;const n=normSubject(l.subject);if(n)c[n]=(c[n]||0)+1;});
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]);
+}
+function addTeacherSubject(teacherId,subj){
+  const t=S.teachers.find(x=>x.id===teacherId);if(!t)return;
+  if(!Array.isArray(t.subjects))t.subjects=[];
+  if(t.subjects.includes(subj))return;
+  pushUndo('担当科目を追加：'+t.name+'／'+subj);
+  t.subjects.push(subj); save();renderAll();renderSubjectProfile();
+}
+function renderSubjectProfile(){
+  const box=$('subjAuditBox');if(!box)return;
+  const TH=2; box.textContent='';
+  const total={}; S.lessons.forEach(l=>total[l.teacherId]=(total[l.teacherId]||0)+1);
+  let addN=0;
+  S.teachers.slice().sort((a,b)=>(total[b.id]||0)-(total[a.id]||0)).forEach(t=>{
+    const prof=teacherSubjectProfile(t.id); if(!prof.length)return;
+    const masterN=new Set((t.subjects||[]).map(normSubject).filter(Boolean));
+    const taughtN=new Set(prof.map(x=>x[0]));
+    const add=prof.filter(([s,c])=>c>=TH&&!masterN.has(s));
+    const rem=(t.subjects||[]).filter(s=>{const n=normSubject(s);return n&&!taughtN.has(n);});
+    addN+=add.length;
+    const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px'});
+    card.append(el('div',{text:t.name+'先生',style:'font-weight:600'}));
+    card.append(el('div',{text:'実績: '+prof.map(([s,c])=>s+c).join('・'),style:'font-size:12px;margin-top:2px'}));
+    card.append(el('div',{text:'現マスタ: '+((t.subjects||[]).join('・')||'（未設定）'),style:'font-size:12px;color:var(--sub);margin-top:2px'}));
+    if(add.length){
+      const row=el('div',{style:'margin-top:4px'});
+      row.append(el('span',{text:'＋追加候補: ',style:'font-size:12px;color:var(--danger);font-weight:600'}));
+      add.forEach(([s,c])=>row.append(el('button',{class:'small primary',text:s+'('+c+'件)を追加',style:'margin:2px 4px 2px 0',onclick:()=>addTeacherSubject(t.id,s)})));
+      card.append(row);
+    }
+    if(rem.length)card.append(el('div',{text:'（参考）実績に出ない登録科目: '+rem.join('・'),style:'font-size:11px;color:var(--sub);margin-top:3px'}));
+    box.append(card);
+  });
+  box.insertBefore(el('div',{text:addN?`追加候補が ${addN}件 あります（各講師の「追加」で反映）`:'追加候補はありません（現マスタが実績を網羅）',style:'font-size:12px;margin-bottom:8px;color:'+(addN?'var(--danger)':'var(--sub)')}),box.firstChild);
+}
+function openSubjectAudit(){renderSubjectProfile();const d=$('subjAuditDlg');if(d&&d.showModal)d.showModal();}
+// ── 授業引き継ぎ表（交代/代行時にLINEで他講師へ渡す。学習内容欄はGmailからClaudeが補記）──
+function buildHandoverSheet(studentId,newTeacherId,mode,curTeacherId){
+  const s=S.students.find(x=>x.id===studentId); if(!s)return '';
+  const lISO=l=>{const w=S.weeks.find(x=>x.id===l.weekId);if(!w||!w.startDate)return null;const dd=new Date(w.startDate+'T00:00:00');dd.setDate(dd.getDate()+Number(l.day));return dd;};
+  const p2=x=>String(x).padStart(2,'0'), _now=new Date();
+  const todayISO=_now.getFullYear()+'-'+p2(_now.getMonth()+1)+'-'+p2(_now.getDate());
+  const isoOf=d=>d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+  const mineAll=S.lessons.filter(l=>l.studentId===studentId).map(l=>({l,d:lISO(l)})).filter(x=>x.d).sort((a,b)=>b.d-a.d);
+  const mine=curTeacherId?mineAll.filter(x=>x.l.teacherId===curTeacherId):mineAll;
+  const past=mine.filter(x=>isoOf(x.d)<=todayISO), future=mine.filter(x=>isoOf(x.d)>todayISO).sort((a,b)=>a.d-b.d);
+  const recent=past.slice(0,5), upcoming=future.slice(0,3);
+  const cur=curTeacherId||(past[0]||mineAll[0]||{l:{}}).l.teacherId||null;
+  const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'?';};
+  const sl=id=>{const x=slotById(id);return x?x.label:'?';};
+  const WD=['月','火','水','木','金','土','日'];
+  const subjC={}; mine.forEach(x=>{const n=(typeof normSubject==='function')?normSubject(x.l.subject):null;if(n)subjC[n]=(subjC[n]||0)+1;});
+  const subjects=Object.entries(subjC).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  const L=[];
+  L.push('【授業引き継ぎ】'+s.name+'さん'+((s.grade||s.school)?'（'+[s.grade,s.school].filter(Boolean).join('・')+'）':''));
+  if(s.targetSchool)L.push(String(s.targetSchool).indexOf('志望校')>=0?s.targetSchool:'志望校：'+s.targetSchool);
+  L.push('担当変更：'+(cur?tn(cur)+'先生':'（不明）')+' → '+tn(newTeacherId)+'先生（'+(mode==='daiko'?'代行':'交代')+'）');
+  L.push('');
+  if(subjects.length)L.push('■科目：'+subjects.join('・'));
+  const fmt=x=>{const d=x.d;return ' ・'+(d.getMonth()+1)+'/'+d.getDate()+'('+WD[(d.getDay()+6)%7]+') '+sl(x.l.slotId)+' '+tn(x.l.teacherId)+'／'+(x.l.subject||'')+(x.l.memo?'（'+x.l.memo+'）':'');};
+  L.push('■直近の授業（実施済み）：');
+  if(!recent.length)L.push(' （記録なし）');
+  recent.forEach(x=>L.push(fmt(x)));
+  if(upcoming.length){L.push('■今後の予定：');upcoming.forEach(x=>L.push(fmt(x)));}
+  if(typeof prefSummary==='function'&&s.prefs&&s.prefs.length)L.push('■希望時間帯：'+prefSummary(s));
+  const nt=S.teachers.find(x=>x.id===newTeacherId);
+  if(nt&&Array.isArray(nt.ngDays)&&nt.ngDays.length)L.push('■新担当のNG曜日：'+nt.ngDays.map(d=>WD[d]).join('・'));
+  if(s.note)L.push('■メモ：'+s.note);
+  L.push('');
+  L.push('■直近の学習内容（授業報告より）：');
+  L.push(' （進捗・宿題・弱点・次回予定をここに記入）');
+  L.push('');
+  const now=new Date();
+  L.push('引き継ぎ日：'+now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate());
+  return L.join('\n');
+}
+function studentTeachers(studentId){
+  const m=new Map();
+  S.lessons.filter(l=>l.studentId===studentId).forEach(l=>{
+    if(l.teacherId==null)return;
+    if(!m.has(l.teacherId))m.set(l.teacherId,{});
+    const n=(typeof normSubject==='function')?normSubject(l.subject):null;
+    if(n){const o=m.get(l.teacherId);o[n]=(o[n]||0)+1;}
+  });
+  const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'?';};
+  return [...m.entries()].map(([tid,subs])=>({tid,label:tn(tid)+(Object.keys(subs).length?'（'+Object.entries(subs).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join('・')+'）':'')}));
+}
+function fillHoCurTeacher(){
+  const sid=$('hoStudent').value;
+  const opts=[{value:'',text:'（指定しない・全体）'},...studentTeachers(sid).map(o=>({value:o.tid,text:o.label}))];
+  fillSelect($('hoCurTeacher'),opts,opts[0].value);
+}
+function openHandover(){
+  const stuOpts=S.students.filter(isActiveStudent).sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(s=>({value:s.id,text:s.name+(s.grade?'（'+s.grade+'）':'')}));
+  const tOpts=(typeof teacherOrder==='function'?teacherOrder():S.teachers).filter(t=>!t.inactive).map(t=>({value:t.id,text:t.name}));
+  fillSelect($('hoStudent'),stuOpts,stuOpts[0]&&stuOpts[0].value);
+  fillSelect($('hoTeacher'),tOpts,tOpts[0]&&tOpts[0].value);
+  fillHoCurTeacher();
+  $('hoStudent').onchange=fillHoCurTeacher;
+  $('hoText').value='';
+  const d=$('handoverDlg'); if(d&&d.showModal)d.showModal();
+}
+function genHandover(){
+  const sid=$('hoStudent').value, tid=$('hoTeacher').value, cur=$('hoCurTeacher').value||null;
+  const mode=(document.querySelector('input[name="hoMode"]:checked')||{}).value||'kotai';
+  $('hoText').value=buildHandoverSheet(sid,tid,mode,cur);
 }
 let bwPlan=null, bsPlan=null;
 function renderBulkControls(){
@@ -3176,6 +3635,7 @@ $('weekForm').addEventListener('submit',ev=>{
       $('wDate').focus();return;
     }
   }
+  pushUndo(weekDlgMode==='edit'?'週を編集':'週を追加'); // weeksをUndo対象化したため週の追加/編集も履歴に積む（無関係Undoでの巻き戻り防止）
   if(weekDlgMode==='edit'){
     const w=curWeek();w.name=name;w.startDate=$('wDate').value;
   }else{
@@ -3191,8 +3651,10 @@ $('weekSelect').onchange=e=>{S.ui.weekId=e.target.value;save();renderAll()};
 $('btnPrevWeek').onclick=()=>stepWeek(-1);
 $('btnNextWeek').onclick=()=>stepWeek(1);
 function copyLessons(fromId,toId){
-  let n=0;
+  let n=0, skipped=0;
+  const toAllowed=new Set(weekSlots(wkById(toId)).map(s=>s.id)); // コピー先週の有効コマ（夏7/通常5）
   S.lessons.filter(l=>l.weekId===fromId).forEach(l=>{
+    if(!toAllowed.has(l.slotId)){skipped++;return;} // 先週に無いコマ（夏の朝コマ等）は複製しない＝孤立授業を作らない
     if(lessonAt(toId,l.day,l.slotId,l.teacherId))return;
     S.lessons.push({...l,id:uid(),weekId:toId,status:'通常',memo:''});n++;
   });
@@ -3200,7 +3662,7 @@ function copyLessons(fromId,toId){
     if(!S.ngOverrides.some(x=>x.weekId===toId&&x.day===o.day&&x.teacherId===o.teacherId))
       S.ngOverrides.push({...o,weekId:toId});
   });
-  toast(n+'件の授業をコピーしました');
+  toast(n+'件の授業をコピーしました'+(skipped?'（コピー先に無いコマ '+skipped+'件はスキップ）':''));
 }
 $('btnCopyWeek').onclick=()=>{
   const src=$('copySrcWeek').value;
@@ -3378,12 +3840,34 @@ async function writeLoserBackup(side,device,stateJson){
   }
 }
 // 復旧箱：同期競合で退避した内容（LS_KEY+'.loser.*'）を一覧し、必要なら戻す
+function restoreRawState(raw,labelName){ // 取込前退避(.recovery)・直前保存版(.prev)からの復元（生のS JSON）
+  if(!raw){toast('データがありません');return;}
+  if(!confirm(labelName+'で現在のデータを置き換えます。\n今のデータは復旧用に自動退避します。よろしいですか？'))return;
+  let parsed; try{parsed=JSON.parse(raw);}catch(e){alert('復元に失敗しました（データ破損）：'+e.message);return;} // 差替前に構文検証
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!Array.isArray(parsed.weeks)||!Array.isArray(parsed.lessons)){alert('復元に失敗しました（データ形式が不正：週/授業が見つかりません）');return;} // 構造検証：空JSONや壊れた形を現データに被せない
+  // 現データを非破壊で退避（既存の.recoveryを壊さないよう上書きせず loser.* へ）
+  try{localStorage.setItem(LS_KEY+'.loser.'+Date.now(),JSON.stringify({side:'local',device:'復元前(自動退避)',at:new Date().toISOString(),state:stateForUploadSafe()}))}catch(e){}
+  const prevS=S, prevKey=localStorage.getItem(LS_KEY), prevPrev=localStorage.getItem(LS_PREV); // 失敗時に localStorage まで戻すため退避
+  try{const ui=S.ui;S=parsed;if(typeof applyMigrations==='function')applyMigrations();S.ui=ui;reconcileHolds();save();load();renderAll();applyDense();undoStack=[];redoStack=[];updateUndoBtn();renderRecovery();toast('復元しました')}
+  catch(e){S=prevS;try{if(prevKey!=null)localStorage.setItem(LS_KEY,prevKey);else localStorage.removeItem(LS_KEY);if(prevPrev!=null)localStorage.setItem(LS_PREV,prevPrev);else localStorage.removeItem(LS_PREV);}catch(_){}try{renderAll()}catch(_){}alert('復元に失敗しました（元のデータは保持）：'+e.message)} // 失敗時はメモリとlocalStorageの両方を元へ戻す
+}
 function renderRecovery(){
   const card=$('recoveryCard'), list=$('recoveryList'); if(!card||!list)return;
   const keys=[]; try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf(LS_KEY+'.loser.')===0)keys.push(k);}}catch(e){}
   keys.sort().reverse();
-  if(!keys.length){card.style.display='none';return;}
+  // 取込前の自動退避(.recovery)・直前保存版(.prev) を先頭に列挙して「戻す」導線を作る（従来はloserのみで復元不能だった）
+  const specials=[];
+  const rec=localStorage.getItem(LS_KEY+'.recovery'); if(rec)specials.push({raw:rec,label:'取込前に自動退避したデータ',name:'取込前の退避データ'});
+  const prev=localStorage.getItem(LS_PREV); if(prev&&prev!==localStorage.getItem(LS_KEY))specials.push({raw:prev,label:'直前に保存した版',name:'直前の保存版'});
+  if(!keys.length&&!specials.length){card.style.display='none';return;}
   card.style.display=''; list.innerHTML='';
+  specials.forEach(sp=>{
+    let cnt='';try{const o=JSON.parse(sp.raw);cnt='授業'+((o.lessons||[]).length)+'件・週'+((o.weeks||[]).length)+'週';}catch(e){}
+    list.append(el('div',{class:'tline'},
+      el('div',{},el('span',{class:'who',text:sp.label}),el('div',{class:'info',text:cnt})),
+      el('div',{style:'display:flex;gap:6px'},
+        el('button',{class:'small primary',text:'この内容に戻す',onclick:()=>restoreRawState(sp.raw,sp.name)}))));
+  });
   keys.slice(0,20).forEach(k=>{
     let o={};try{o=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}
     const at=(o.at||'').replace('T',' ').slice(0,16);
@@ -3397,7 +3881,7 @@ function renderRecovery(){
           let stateStr=o.state;
           if(o.gz){stateStr=await gunzB64(o.state); if(!stateStr){alert('復元に失敗しました（解凍エラー）');return;}}
           await writeLoserBackup('local','復元前',stateForUploadSafe()); // 復元前に現データを退避（圧縮）
-          try{const ui=S.ui;S=JSON.parse(stateStr);if(typeof applyMigrations==='function')applyMigrations();S.ui=ui;save();load();renderAll();applyDense();undoStack=[];redoStack=[];updateUndoBtn();renderRecovery();toast('退避内容に戻しました')}catch(e){alert('復元に失敗しました：'+e.message)}
+          try{const ui=S.ui;S=JSON.parse(stateStr);if(typeof applyMigrations==='function')applyMigrations();S.ui=ui;reconcileHolds();save();load();renderAll();applyDense();undoStack=[];redoStack=[];updateUndoBtn();renderRecovery();toast('退避内容に戻しました')}catch(e){alert('復元に失敗しました：'+e.message)}
         }}),
         el('button',{class:'small danger',text:'削除',onclick:()=>{if(confirm('この退避データを削除しますか？')){localStorage.removeItem(k);renderRecovery();}}})));
     list.append(row);
@@ -3424,16 +3908,30 @@ $('importFile').onchange=e=>{
     const inc=c(data), cur=c(S), sv=data.__savedAt?('　'+String(data.__savedAt).slice(0,16).replace('T',' ')+'に保存'):'';
     if(!confirm(`このファイルで全データを置き換えます。\n\n【読み込む】講師${inc.t}・生徒${inc.s}・授業${inc.l}・週${inc.w}${sv}\n【今のデータ】講師${cur.t}・生徒${cur.s}・授業${cur.l}・週${cur.w}\n\n※今のデータは復元用に自動退避します。進めますか？`))return;
     try{localStorage.setItem(LS_KEY+'.recovery',JSON.stringify(S))}catch(e){} // 復元前に現データを退避（押しても消えない）
-    S=data;save();load();renderAll();applyDense();
+    S=data;
+    // 取り込んだデータは「移行済み」とみなし、2026-07-10の一度きり移行(固定名簿TMPL注入・科目正規化)をload()で再発火させない
+    // ＝「消した仮予定が復活」「未知科目が空白化」を防止。新規インストールの初回移行(defaultState経路)は温存される。
+    S.settings=S.settings||{};
+    // 危険な「再注入系」だけ抑止する：固定名簿TMPL注入(orgPlan20260710)と未知科目の空白化(rules20260710f)。
+    // 他の正規化フラグは温存し、正真正銘の旧版JSONを取り込んだ場合に必要な移行は実行させる（Codex指摘対応）。
+    ['orgPlan20260710','rules20260710f'].forEach(f=>{if(!S.settings[f])S.settings[f]=true;});
+    reconcileHolds();save();load();renderAll();applyDense(); // reconcileHolds: 取込で埋まった枠の仮押さえを解除
     undoStack=[];redoStack=[];updateUndoBtn(); // 取込後はUndo履歴をクリア（取込前に戻る事故を防ぐ）
     toast('読み込みました（今のデータは復元用に退避済み）');
   }catch(err){alert('読み込めませんでした：'+err.message)}};
   r.readAsText(f);e.target.value='';
 };
+$('btnAudit')&&($('btnAudit').onclick=renderAuditReport);
+$('btnSubjAudit')&&($('btnSubjAudit').onclick=openSubjectAudit);
+$('btnHandover')&&($('btnHandover').onclick=openHandover);
+$('hoGen')&&($('hoGen').onclick=genHandover);
+$('hoCopy')&&($('hoCopy').onclick=async()=>{const t=$('hoText').value;if(!t)return;if(navigator.share){try{await navigator.share({text:t});return;}catch(e){}}try{await navigator.clipboard.writeText(t);toast('コピーしました。LINEに貼り付けてください');}catch(e){}});
+{const _ac=$('auditCap'); if(_ac)_ac.textContent=STUDIO_CAP;}
 $('btnDelWeek').onclick=()=>{
   const w=curWeek();
   if(S.weeks.length<=1){alert('最後の週は削除できません');return}
-  if(!confirm(`「${w.name}」とその授業をすべて削除しますか？`))return;
+  if(!confirm(`「${w.name}」とその授業をすべて削除しますか？\n（「↩ 元に戻す」で取り消せます）`))return;
+  pushUndo('週を削除'); // 週削除を可逆化（Undo対象。UNDO_COLSにweeksを追加済）
   S.lessons=S.lessons.filter(l=>l.weekId!==w.id);
   S.ngOverrides=S.ngOverrides.filter(o=>o.weekId!==w.id);
   S.slotOverrides=S.slotOverrides.filter(o=>o.weekId!==w.id);
@@ -3456,6 +3954,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>{
     if(b.dataset.tab==='search'){renderSearchControls();runSearch()}
     if(b.dataset.tab==='today'){renderToday()}
     if(b.dataset.tab==='match'){renderMatchControls()}
+    if(b.dataset.tab==='plan'){renderPlanControls()}
     if(b.dataset.tab==='bulk'){renderBulkControls()}
     if(b.dataset.tab==='data'){renderRecovery()}
     if(b.dataset.tab==='swap'){renderSwap();renderSwapCands()}
