@@ -1133,7 +1133,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.16.1';
+const APP_VER='2.16.2';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -4070,7 +4070,24 @@ $('importFile').onchange=e=>{
     // 復元プレビュー：読み込む内容と今の内容を件数で提示（パネル総意の2段階）
     const c=o=>({t:(o.teachers||[]).length,s:(o.students||[]).length,l:(o.lessons||[]).length,w:(o.weeks||[]).length});
     const inc=c(data), cur=c(S), sv=data.__savedAt?('　'+String(data.__savedAt).slice(0,16).replace('T',' ')+'に保存'):'';
-    if(!confirm(`このファイルで全データを置き換えます。\n\n【読み込む】講師${inc.t}・生徒${inc.s}・授業${inc.l}・週${inc.w}${sv}\n【今のデータ】講師${cur.t}・生徒${cur.s}・授業${cur.l}・週${cur.w}\n\n※今のデータは復元用に自動退避します。進めますか？`))return;
+    // ── 取込ゲート：確定"前"に読み込むデータを監査（auditDoubleBookingsをグローバルS一時切替で流用）──
+    let gate={studentDup:[],teacherDup:[],overCap:[],teacherNG:[]};
+    if(typeof auditDoubleBookings==='function'){try{const _b=S;S=data;gate=auditDoubleBookings();S=_b;}catch(_e){}}
+    const sev=(gate.studentDup||[]).length+(gate.teacherDup||[]).length+(gate.overCap||[]).length; // 重大（不可レベル）
+    const ngN=(gate.teacherNG||[]).length; // 講師NG（要確認レベル）
+    let gmsg;
+    if(sev||ngN){
+      gmsg='\n\n【取込前チェック】'
+        +`\n・生徒二重予約：${gate.studentDup.length}件`
+        +`\n・講師二重予約：${gate.teacherDup.length}件`
+        +`\n・席上限超過：${gate.overCap.length}件`
+        +`\n・講師NG稼働(今日以降)：${ngN}件`;
+      if(sev)gmsg+=`\n\n⚠ 重大な違反（二重予約・席超過）が ${sev}件 あります。取り込むとこのままアプリに入ります。元シートを直して再取込を強く推奨します。`;
+    } else {
+      gmsg='\n\n【取込前チェック】✅ 二重予約・席超過・講師NGは検出されませんでした。';
+    }
+    if(!confirm(`このファイルで全データを置き換えます。\n\n【読み込む】講師${inc.t}・生徒${inc.s}・授業${inc.l}・週${inc.w}${sv}\n【今のデータ】講師${cur.t}・生徒${cur.s}・授業${cur.l}・週${cur.w}${gmsg}\n\n※今のデータは復元用に自動退避します。進めますか？`))return;
+    if(sev&&!confirm(`重大な違反 ${sev}件 を含んだまま取り込みます。本当によろしいですか？（取込後「二重予約を監査する」で詳細を確認できます）`))return;
     try{localStorage.setItem(LS_KEY+'.recovery',JSON.stringify(S))}catch(e){} // 復元前に現データを退避（押しても消えない）
     S=data;
     // 取り込んだデータは「移行済み」とみなし、2026-07-10の一度きり移行(固定名簿TMPL注入・科目正規化)をload()で再発火させない
