@@ -1160,8 +1160,10 @@
       <button class="primary" id="parentShare">📲 共有する</button>
       <button id="parentCopy">📋 コピー</button>
     </div>
+    <label style="font-size:12px;color:var(--sub)">次回確認日（返信待ちなら設定）<input type="date" id="parentFollowup" style="margin-left:6px;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:4px"></label>
     <label style="flex-direction:row;align-items:center;gap:6px;font-weight:normal;margin-top:4px">
-      <input type="checkbox" id="parentSent" style="width:auto">保護者へ返信しました（案件の「保護者へ返信」を消込）</label>
+      <input type="checkbox" id="parentSent" style="width:auto">保護者へ返信しました（連絡を記録し、案件の「保護者へ返信」を消込）</label>
+    <div id="parentHistory" style="font-size:12px;color:var(--sub)"></div>
   </div>
   <div class="dlgfoot"><button type="button" id="parentClose">閉じる</button></div>
 </dialog>
@@ -1215,7 +1217,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.31.0';
+const APP_VER='2.32.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1347,6 +1349,7 @@ function load(){
   if(!Array.isArray(S.cases))S.cases=[]; // Phase 3：案件（欠席→振替→連絡の完了状態）
   if(!Array.isArray(S.handovers))S.handovers=[]; // 引き継ぎ未送信の集約（作表→送信で消込）
   if(!Array.isArray(S.inbox))S.inbox=[]; // P5：電話/LINE受付の1行キュー（open→人が消込）
+  if(!Array.isArray(S.contacts))S.contacts=[]; // N2：保護者連絡ログ（履歴＋次回確認日リマインド）
   if(!S.meta||typeof S.meta!=='object')S.meta={}; // A①：データ来歴（datasetId/sourceCheckedAt/importedAt等）
   // 朝2コマ（夏時間割用）をmasterに補完し、master順に整える（既存データの移行）
   SLOT_MASTER.forEach(m=>{if(!S.slots.some(s=>s.id===m.id))S.slots.push({...m})});
@@ -2846,7 +2849,18 @@ function getActionSummary(){
   const cases=getOpenCases();
   const inbox=(typeof getOpenInbox==='function')?getOpenInbox():[]; // P5 受付メモ
   const unrec=(typeof getUnrecordedAtt==='function')?getUnrecordedAtt():[]; // N1 出席未記録
-  return {mk,tasks,handovers,cases,inbox,unrec,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length+unrec.length};
+  const duec=(typeof getDueContacts==='function')?getDueContacts():[]; // N2 連絡フォロー（確認日到来）
+  return {mk,tasks,handovers,cases,inbox,unrec,duec,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length+unrec.length+duec.length};
+}
+// ===== N2 保護者連絡ログ：送信記録＋次回確認日リマインド（送信は人。ここは記録・催促のみ）=====
+function getDueContacts(){ const t=todayISO(); return (S.contacts||[]).filter(c=>c&&!c.done&&c.followup&&c.followup<=t); }
+function contactDone(id){ const c=(S.contacts||[]).find(x=>x.id===id); if(!c)return; pushUndo('連絡フォロー完了'); c.done=true; c.doneAt=new Date().toISOString(); save(); renderAll(); if(typeof renderCaseBoard==='function')renderCaseBoard(); }
+function renderContactHistory(sid){
+  const box=$('parentHistory'); if(!box)return; box.innerHTML='';
+  const list=(S.contacts||[]).filter(c=>c&&c.studentId===sid).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,5);
+  if(!list.length){ box.textContent='（この生徒の連絡記録はまだありません）'; return; }
+  box.append(el('div',{style:'font-weight:600;margin-top:4px',text:'この生徒の連絡履歴（直近）'}));
+  list.forEach(c=>{ const d=c.at?c.at.slice(5,10).replace('-','/'):''; box.append(el('div',{text:'・'+d+' '+(c.type||'')+(c.note?'（'+c.note+'）':'')+(c.followup&&!c.done?' → '+c.followup+'確認':'')+(c.done?' ✓':'')})); });
 }
 // ===== N1 出席未記録ガード：終了したコマで出欠(att)が未入力のものを当日中に潰す =====
 function lessonEndPassed(l){ // 授業コマの終了時刻を過ぎたか
@@ -2896,7 +2910,7 @@ function renderCaseBoard(){
   const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'';};
   const sn=id=>{const s=studentById(id);return s?s.name:'(不明)';};
   const sec=t=>el('div',{text:t,style:'font-weight:700;color:var(--danger);margin:8px 0 4px'});
-  const {mk,tasks,handovers,cases,inbox,unrec}=getActionSummary();
+  const {mk,tasks,handovers,cases,inbox,unrec,duec}=getActionSummary();
   const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'（全体）';};
   const gotoSwap=()=>{const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();};
   // P5 受付メモ（電話/LINEの1行キュー）：新規追加＋未処理一覧
@@ -2912,6 +2926,17 @@ function renderCaseBoard(){
         el('button',{class:'small primary',text:'✅ 完了',onclick:()=>inboxDone(x.id)}),
         el('button',{class:'small danger',text:'🗑',onclick:()=>inboxDelete(x.id)})));
       box.append(ic);
+    });
+  }
+  // N2 連絡フォロー（次回確認日が到来した保護者連絡）
+  if(duec&&duec.length){
+    box.append(sec('📮 連絡フォロー（確認予定日到来）：'+duec.length+'件'));
+    duec.forEach(c=>{
+      const cc=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px'});
+      cc.append(el('div',{style:'font-weight:600',text:'📮 '+(c.studentName||'?')+'さん：'+(c.type||'')+(c.note?'（'+c.note+'）':'')+'　'+c.followup+'確認予定'}));
+      cc.append(el('div',{style:'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px'},
+        el('button',{class:'small primary',text:'✅ 確認済み',onclick:()=>contactDone(c.id)})));
+      box.append(cc);
     });
   }
   // N1 出席未記録（終了したコマでatt未入力）＝当日中に潰す
@@ -2985,7 +3010,7 @@ function renderCaseBoard(){
       box.append(card);
     });
   }
-  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length)&&!(unrec&&unrec.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
+  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length)&&!(unrec&&unrec.length)&&!(duec&&duec.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
   const done=(S.cases||[]).filter(c=>c.status==='done').length;
   if(done)box.append(el('div',{text:'（完了した欠席案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
 }
@@ -3279,13 +3304,14 @@ function renderParentDraft(){
 function openParentDlg(caseId){
   const c=(S.cases||[]).find(x=>x.id===caseId); if(!c)return;
   const les=S.lessons.find(l=>l.id===c.lessonId);
-  parentCtx={caseId:c.id, studentName:c.studentName||'', subject:(les&&les.subject)||'', absLabel:lessonDateLabel(les)};
+  parentCtx={caseId:c.id, studentId:c.studentId||null, studentName:c.studentName||'', subject:(les&&les.subject)||'', absLabel:lessonDateLabel(les)};
   const d=$('caseDlg'); if(d)d.close();
   const r=document.querySelector('input[name="parentTpl"][value="reply"]'); if(r)r.checked=true;
-  $('parentWhen').value='';
+  $('parentWhen').value=''; $('parentFollowup').value='';
   $('parentTarget').textContent='宛先：'+(c.studentName||'?')+'さんの保護者';
   const rep=(c.requirements||[]).find(x=>x.key==='reply');
   $('parentSent').checked=!!(rep&&rep.done);
+  renderContactHistory(parentCtx.studentId);
   renderParentDraft();
   $('parentDlg').showModal();
 }
@@ -3293,7 +3319,20 @@ document.querySelectorAll('input[name="parentTpl"]').forEach(r=>r.addEventListen
 $('parentWhen')&&($('parentWhen').oninput=renderParentDraft);
 $('parentCopy')&&($('parentCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('parentText').value);toast('コピーしました。Gmail等に貼り、ご自身で送信してください');}catch(e){toast('コピーできませんでした。長押しで選択してください');}});
 $('parentShare')&&($('parentShare').onclick=async()=>{const t=$('parentText').value;if(navigator.share){try{await navigator.share({text:t});}catch(e){}}else{try{await navigator.clipboard.writeText(t);toast('共有非対応のためコピーしました');}catch(e){}}});
-$('parentSent')&&($('parentSent').onchange=e=>{ if(!parentCtx)return; const c=(S.cases||[]).find(x=>x.id===parentCtx.caseId); if(!c)return; const rep=(c.requirements||[]).find(x=>x.key==='reply'); if(rep&&rep.done!==e.target.checked)toggleCaseReq(c.id,'reply'); });
+$('parentSent')&&($('parentSent').onchange=e=>{
+  if(!parentCtx)return;
+  if(e.target.checked){ // N2 連絡ログを記録（送信は人。ここは記録のみ）
+    if(!Array.isArray(S.contacts))S.contacts=[];
+    const tplLabel={reply:'欠席受付',candidate:'振替候補',confirm:'振替確定'}[parentCtx.tpl||'reply'];
+    const fu=$('parentFollowup').value||'';
+    S.contacts.push({id:uid(),studentId:parentCtx.studentId||null,studentName:parentCtx.studentName||'',type:tplLabel,note:(parentCtx.when||'').trim(),at:new Date().toISOString(),followup:fu,done:false});
+    toast('連絡を記録しました'+(fu?('（'+fu+'に確認）'):''));
+    renderContactHistory(parentCtx.studentId);
+  }
+  const c=(S.cases||[]).find(x=>x.id===parentCtx.caseId);
+  if(c){ const rep=(c.requirements||[]).find(x=>x.key==='reply'); if(rep&&rep.done!==e.target.checked)toggleCaseReq(c.id,'reply'); }
+  else { save(); }
+});
 $('parentClose')&&($('parentClose').onclick=()=>$('parentDlg').close());
 
 /* ---------------- P2 今日画面の強化：要対応ミニ要約＋smemoクイック入力 ---------------- */
@@ -3309,6 +3348,7 @@ function renderTodaySummary(){
     if(a.cases.length)parts.push('欠席案件'+a.cases.length);
     if(a.inbox&&a.inbox.length)parts.push('受付'+a.inbox.length);
     if(a.unrec&&a.unrec.length)parts.push('出席未記録'+a.unrec.length);
+    if(a.duec&&a.duec.length)parts.push('連絡確認'+a.duec.length);
     wrap.append(el('button',{style:'width:100%;text-align:left;border:1px solid var(--danger);background:transparent;color:var(--danger);border-radius:10px;padding:8px 12px;font-weight:700;display:flex;flex-direction:column;gap:2px;cursor:pointer',onclick:()=>{if(typeof openCaseBoard==='function')openCaseBoard();}},
       el('span',{text:'🗂 要対応 '+a.total+'件（タップで開く）'}),
       el('span',{style:'font-size:12px;font-weight:normal;color:var(--sub)',text:parts.join('・')})));
