@@ -795,7 +795,8 @@
         <button id="btnExport">JSON書き出し（バックアップ保存）</button>
         <label style="display:inline-block"><button class="danger" onclick="document.getElementById('importFile').click()">⚠ 全データを置き換え（復元）</button>
           <input type="file" id="importFile" accept=".json" style="display:none"></label>
-        <p style="font-size:11px;color:var(--sub);margin-top:6px">※取込用JSON（授業や備忘を反映するファイル）は、こちらの「全データを置き換え」で読み込みます。上の「マスタだけ取込」ではありません。</p>
+        <button id="btnUndoImport" style="margin-left:6px">↩ 取込を元に戻す</button>
+        <p style="font-size:11px;color:var(--sub);margin-top:6px">※取込用JSON（授業や備忘を反映するファイル）は、こちらの「全データを置き換え」で読み込みます。上の「マスタだけ取込」ではありません。取込直後なら「↩取込を元に戻す」で取込前に戻せます。</p>
       </div>
       <div class="card" id="archiveCard">
         <h3>🗄 年度アーカイブ（容量を空ける）</h3>
@@ -1218,7 +1219,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.33.0';
+const APP_VER='2.34.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -4439,6 +4440,43 @@ $('btnExport').onclick=()=>{
   a.click();URL.revokeObjectURL(a.href);
   toast('バックアップを保存しました：'+fn+'（ダウンロードフォルダ→Google Drive等に残すと安全）');
 };
+// N5 取込の影響サマリ：現データ(S)と取込データ(data)を「週開始日|曜|コマ|生徒名」で突合し、追加/変更/削除・大減週・未完了案件の授業消失を出す
+function importImpact(data){
+  const nameOf=(arr,id)=>{const s=(arr||[]).find(x=>x.id===id);return s?s.name:('#'+id);};
+  const wStart=(weeks,id)=>{const w=(weeks||[]).find(x=>x.id===id);return (w&&w.startDate)||'?';};
+  const keyOf=(l,weeks,studs)=> wStart(weeks,l.weekId)+'|'+l.day+'|'+l.slotId+'|'+nameOf(studs,l.studentId);
+  // 講師は名前で比較（IDは再抽出で変わるため）
+  const val=(l,weeks,studs,teas)=>({tName:nameOf(teas,l.teacherId),subject:l.subject||''});
+  const curM=new Map(), incM=new Map();
+  (S.lessons||[]).forEach(l=>{if(l&&l.studentId)curM.set(keyOf(l,S.weeks,S.students),val(l,S.weeks,S.students,S.teachers));});
+  (data.lessons||[]).forEach(l=>{if(l&&l.studentId)incM.set(keyOf(l,data.weeks,data.students),val(l,data.weeks,data.students,data.teachers));});
+  let added=0,removed=0,changed=0;
+  incM.forEach((v,k)=>{ if(!curM.has(k))added++; else { const o=curM.get(k); if(o.tName!==v.tName||o.subject!==v.subject)changed++; } });
+  curM.forEach((v,k)=>{ if(!incM.has(k))removed++; });
+  const wk={};
+  (S.weeks||[]).forEach(w=>{wk[w.startDate]=wk[w.startDate]||{name:w.name||w.startDate,cur:0,inc:0};});
+  (data.weeks||[]).forEach(w=>{wk[w.startDate]=wk[w.startDate]||{name:w.name||w.startDate,cur:0,inc:0};});
+  (S.lessons||[]).forEach(l=>{const sd=wStart(S.weeks,l.weekId);if(wk[sd])wk[sd].cur++;});
+  (data.lessons||[]).forEach(l=>{const sd=wStart(data.weeks,l.weekId);if(wk[sd])wk[sd].inc++;});
+  const weeksDrop=Object.values(wk).filter(x=>x.cur>=4 && x.inc < x.cur*0.5).map(x=>x.name+'('+x.cur+'→'+x.inc+')');
+  const openLids=new Set((S.cases||[]).filter(c=>c&&c.status!=='done'&&c.lessonId).map(c=>c.lessonId));
+  let caseVanish=0;
+  (S.lessons||[]).forEach(l=>{ if(openLids.has(l.id)){ const k=keyOf(l,S.weeks,S.students); if(!incM.has(k))caseVanish++; } });
+  return {added,removed,changed,weeksDrop,caseVanish};
+}
+// N5 直前の取込を元に戻す（取込時に LS_KEY+'.recovery' へ退避した1世代を復元）
+function undoImport(){
+  const raw=localStorage.getItem(LS_KEY+'.recovery');
+  if(!raw){alert('取込前のデータが見つかりません（まだ取込していない、または退避がありません）。');return;}
+  if(!confirm('直前の取込を取り消し、取込前のデータに戻します。\n現在のデータは上書きされます（この操作の直前状態は復旧箱に退避します）。よろしいですか？'))return;
+  try{
+    const d=JSON.parse(raw);
+    try{localStorage.setItem(LS_KEY+'.loser.undoImport',JSON.stringify(S))}catch(_e){}
+    S=d; save(); load(); renderAll(); if(typeof applyDense==='function')applyDense();
+    toast('取込前のデータに戻しました');
+  }catch(e){alert('復元できませんでした：'+e.message);}
+}
+$('btnUndoImport')&&($('btnUndoImport').onclick=undoImport);
 $('importFile').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
@@ -4470,8 +4508,16 @@ $('importFile').onchange=e=>{
     } else {
       gmsg='\n\n【取込前チェック】✅ 二重予約・席超過・講師NG・未知スロットは検出されませんでした。';
     }
-    if(!confirm(`このファイルで全データを置き換えます。\n\n【読み込む】講師${inc.t}・生徒${inc.s}・授業${inc.l}・週${inc.w}${sv}\n【今のデータ】講師${cur.t}・生徒${cur.s}・授業${cur.l}・週${cur.w}${gmsg}\n\n※今のデータは復元用に自動退避します。進めますか？`))return;
-    if((sev||unkSlot)&&!confirm(`⚠ 重大な違反 ${sev}件・未知スロット ${unkSlot}件 を含んだまま取り込みます。本当によろしいですか？（取込後「二重予約を監査する」で確認できます）`))return;
+    // N5 影響サマリ（差分・大減週・未完了案件の授業消失）
+    const imp=(typeof importImpact==='function')?importImpact(data):null;
+    if(imp){
+      gmsg+=`\n\n【差分】追加${imp.added}・変更${imp.changed}・削除${imp.removed}`;
+      if(imp.weeksDrop.length)gmsg+=`\n⚠ 授業が大きく減る週：${imp.weeksDrop.slice(0,6).join('、')}${imp.weeksDrop.length>6?' …':''}（取り違え・抽出漏れの疑い）`;
+      if(imp.caseVanish)gmsg+=`\n⚠ 未完了案件の授業が消えます：${imp.caseVanish}件（先に対応するか、消えてよいか確認）`;
+    }
+    if(!confirm(`このファイルで全データを置き換えます。\n\n【読み込む】講師${inc.t}・生徒${inc.s}・授業${inc.l}・週${inc.w}${sv}\n【今のデータ】講師${cur.t}・生徒${cur.s}・授業${cur.l}・週${cur.w}${gmsg}\n\n※今のデータは復元用に自動退避します（「↩取込を元に戻す」でいつでも復元可）。進めますか？`))return;
+    const impRisk=imp&&(imp.caseVanish||imp.weeksDrop.length);
+    if((sev||unkSlot||impRisk)&&!confirm(`⚠ 重大な違反 ${sev}件・未知スロット ${unkSlot}件`+(imp?`・大減週 ${imp.weeksDrop.length}件・未完了案件の授業消失 ${imp.caseVanish}件`:'')+` を含んだまま取り込みます。本当によろしいですか？（取込後「↩取込を元に戻す」で戻せます）`))return;
     try{localStorage.setItem(LS_KEY+'.recovery',JSON.stringify(S))}catch(e){} // 復元前に現データを退避（押しても消えない）
     S=data;
     // A①：取込JSONのmeta（datasetId/sourceModifiedAt/sourceCheckedAt/coveredWeeks等）を採用し、取込時刻を刻む
