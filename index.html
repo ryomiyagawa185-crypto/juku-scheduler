@@ -547,6 +547,7 @@
   <!-- ============ 今日（当日運用） ============ -->
   <section class="view" id="view-today">
     <div id="todayHead" class="todayhead"></div>
+    <div id="todaySummary"></div>
     <div id="todayList" class="todaylist"></div>
   </section>
 
@@ -1165,6 +1166,18 @@
   <div class="dlgfoot"><button type="button" id="parentClose">閉じる</button></div>
 </dialog>
 
+<dialog id="smemoDlg">
+  <div class="dlghead"><span>📘 授業メモ（引き継ぎ表に自動反映）</span></div>
+  <div class="dlgbody" style="gap:8px">
+    <div id="smemoTarget" style="font-size:15px;font-weight:700"></div>
+    <label style="font-size:12px;color:var(--sub)">進度<input type="text" id="smProgress" placeholder="例：二次方程式の解の公式まで" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
+    <label style="font-size:12px;color:var(--sub)">宿題<input type="text" id="smHomework" placeholder="例：p42-43" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
+    <label style="font-size:12px;color:var(--sub)">理解度<input type="text" id="smUnderstanding" placeholder="例：因数分解に不安" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
+    <label style="font-size:12px;color:var(--sub)">次回<input type="text" id="smNext" placeholder="例：平方完成へ" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
+  </div>
+  <div class="dlgfoot"><button type="button" id="smemoSave" class="primary">保存</button><button type="button" id="smemoClose">閉じる</button></div>
+</dialog>
+
 <!-- 講師の稼働可能時間（曜日×コマ）ダイアログ -->
 <dialog id="availDlg">
   <div class="dlghead"><span id="availTitle">稼働時間</span></div>
@@ -1202,7 +1215,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.27.0';
+const APP_VER='2.28.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -3045,6 +3058,7 @@ function renderToday(){
   const t=findTodayWeekDay(); todayCtx=t;
   const dd=new Date(); const dateLabel=(dd.getMonth()+1)+'月'+dd.getDate()+'日（'+DAYS[(dd.getDay()+6)%7]+'）';
   head.innerHTML=''; head.append(el('div',{class:'todaydate'},'📱 今日　'+dateLabel));
+  renderTodaySummary(); // P2 要対応ミニ要約
   list.innerHTML='';
   if(!t){ list.append(el('div',{class:'todayempty',text:'今日の日付に対応する週がありません。「＋新しい週」で作成するか、時間割で確認してください。'})); return; }
   const w=t.week, day=t.day, slots=weekSlots(w), sIdx=id=>slots.findIndex(s=>s.id===id);
@@ -3074,8 +3088,16 @@ function renderToday(){
     card.append(el('div',{class:'tcard-acts'},
       el('button',{class:'tbtn ok'+(l.att==='出席'?' on':''),text:'出席',onclick:()=>setAtt(l.id,'出席')}),
       el('button',{class:'tbtn ng'+(l.att==='欠席'?' on':''),text:'欠席',onclick:()=>markAbsent(l.id)}),
+      el('button',{class:'tbtn'+((l.smemo&&(l.smemo.progress||l.smemo.homework||l.smemo.understanding||l.smemo.next))?' on':''),text:'📘メモ',onclick:()=>openSmemoDlg(l.id)}),
       el('button',{class:'tbtn',text:'時間変更',onclick:()=>{S.ui.weekId=w.id;S.ui.day=day;document.querySelector('nav.tabs button[data-tab="grid"]').click();startMove(l.id);}}),
       el('button',{class:'tbtn line',text:'📨LINE',onclick:()=>openLineDlg(l.id)})));
+    if(l.att==='欠席'){ // P2 欠席確定後の次アクション導線（保護者返信→振替候補）
+      const c=(S.cases||[]).find(x=>x.lessonId===l.id);
+      const nx=el('div',{class:'tcard-acts',style:'margin-top:4px'});
+      if(c)nx.append(el('button',{class:'tbtn',text:'✉️保護者へ返信草案',onclick:()=>openParentDlg(c.id)}));
+      if(l.status==='要振替')nx.append(el('button',{class:'tbtn',text:'🔁振替候補をさがす',onclick:()=>{const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();}}));
+      if(nx.childNodes.length)card.append(nx);
+    }
     list.append(card);
   });
 }
@@ -3198,6 +3220,39 @@ $('parentCopy')&&($('parentCopy').onclick=async()=>{try{await navigator.clipboar
 $('parentShare')&&($('parentShare').onclick=async()=>{const t=$('parentText').value;if(navigator.share){try{await navigator.share({text:t});}catch(e){}}else{try{await navigator.clipboard.writeText(t);toast('共有非対応のためコピーしました');}catch(e){}}});
 $('parentSent')&&($('parentSent').onchange=e=>{ if(!parentCtx)return; const c=(S.cases||[]).find(x=>x.id===parentCtx.caseId); if(!c)return; const rep=(c.requirements||[]).find(x=>x.key==='reply'); if(rep&&rep.done!==e.target.checked)toggleCaseReq(c.id,'reply'); });
 $('parentClose')&&($('parentClose').onclick=()=>$('parentDlg').close());
+
+/* ---------------- P2 今日画面の強化：要対応ミニ要約＋smemoクイック入力 ---------------- */
+function renderTodaySummary(){
+  const box=$('todaySummary'); if(!box)return; box.innerHTML='';
+  const a=(typeof getActionSummary==='function')?getActionSummary():null;
+  if(!a||!a.total)return;
+  const parts=[];
+  if(a.mk.length)parts.push('振替期限'+a.mk.length);
+  if(a.tasks.length)parts.push('二重/席'+a.tasks.length);
+  if(a.handovers.length)parts.push('引継ぎ未送信'+a.handovers.length);
+  if(a.cases.length)parts.push('欠席案件'+a.cases.length);
+  const bar=el('button',{style:'width:100%;text-align:left;border:1px solid var(--danger);background:transparent;color:var(--danger);border-radius:10px;padding:8px 12px;margin:8px 0;font-weight:700;display:flex;flex-direction:column;gap:2px;cursor:pointer',onclick:()=>{if(typeof openCaseBoard==='function')openCaseBoard();}},
+    el('span',{text:'🗂 要対応 '+a.total+'件（タップで開く）'}),
+    el('span',{style:'font-size:12px;font-weight:normal;color:var(--sub)',text:parts.join('・')}));
+  box.append(bar);
+}
+let smemoLid=null;
+function openSmemoDlg(id){
+  const l=S.lessons.find(x=>x.id===id); if(!l)return; smemoLid=id;
+  const stu=studentById(l.studentId), sl=slotById(l.slotId);
+  $('smemoTarget').textContent=(stu?stu.name:'?')+'さん　'+(sl?sl.label:'')+(l.subject?'・'+l.subject:'');
+  const m=l.smemo||{};
+  $('smProgress').value=m.progress||''; $('smHomework').value=m.homework||'';
+  $('smUnderstanding').value=m.understanding||''; $('smNext').value=m.next||'';
+  $('smemoDlg').showModal();
+}
+$('smemoSave')&&($('smemoSave').onclick=()=>{
+  const l=S.lessons.find(x=>x.id===smemoLid); if(!l){$('smemoDlg').close();return;}
+  pushUndo('授業メモ');
+  l.smemo={progress:$('smProgress').value.trim(),homework:$('smHomework').value.trim(),understanding:$('smUnderstanding').value.trim(),next:$('smNext').value.trim()};
+  save(); renderToday(); try{renderGrid()}catch(e){} $('smemoDlg').close(); toast('授業メモを保存しました（引き継ぎ表に反映されます）');
+});
+$('smemoClose')&&($('smemoClose').onclick=()=>$('smemoDlg').close());
 
 /* ---------------- 希望時間帯ダイアログ ---------------- */
 let prefEditingStudentId=null;
