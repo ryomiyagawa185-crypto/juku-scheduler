@@ -1141,6 +1141,30 @@
   <div class="dlgfoot"><button type="button" id="lineClose">閉じる</button></div>
 </dialog>
 
+<dialog id="parentDlg">
+  <div class="dlghead"><span>✉️ 保護者への返信草案</span></div>
+  <div class="dlgbody" style="gap:8px">
+    <div id="parentTarget" style="font-size:15px;font-weight:700"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px">
+      <label style="flex-direction:row;align-items:center;gap:4px;font-weight:normal"><input type="radio" name="parentTpl" value="reply" checked style="width:auto">欠席受付</label>
+      <label style="flex-direction:row;align-items:center;gap:4px;font-weight:normal"><input type="radio" name="parentTpl" value="candidate" style="width:auto">振替候補</label>
+      <label style="flex-direction:row;align-items:center;gap:4px;font-weight:normal"><input type="radio" name="parentTpl" value="confirm" style="width:auto">振替確定</label>
+    </div>
+    <label id="parentWhenWrap" style="font-size:12px;color:var(--sub);display:none">振替の日時（例：7月20日（月）16時40分〜）
+      <input type="text" id="parentWhen" placeholder="7月20日（月）16時40分〜" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
+    <p style="font-size:11px;color:var(--sub);margin:0">生徒名・日時・科目のみが入ります。内部メモ・連絡先は入りません。<b>送信は必ずご自身で</b>行ってください。</p>
+    <textarea id="parentText" style="width:100%;min-height:220px;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
+    <div id="parentIssues" style="font-size:12px;color:var(--danger)"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="primary" id="parentShare">📲 共有する</button>
+      <button id="parentCopy">📋 コピー</button>
+    </div>
+    <label style="flex-direction:row;align-items:center;gap:6px;font-weight:normal;margin-top:4px">
+      <input type="checkbox" id="parentSent" style="width:auto">保護者へ返信しました（案件の「保護者へ返信」を消込）</label>
+  </div>
+  <div class="dlgfoot"><button type="button" id="parentClose">閉じる</button></div>
+</dialog>
+
 <!-- 講師の稼働可能時間（曜日×コマ）ダイアログ -->
 <dialog id="availDlg">
   <div class="dlghead"><span id="availTitle">稼働時間</span></div>
@@ -1178,7 +1202,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.25.0';
+const APP_VER='2.26.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -2863,7 +2887,9 @@ function renderCaseBoard(){
       c.requirements.forEach(r=>{
         const row=el('label',{style:'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:3px;cursor:pointer'});
         const cb=el('input',{type:'checkbox',style:'width:auto'});cb.checked=r.done;cb.onclick=()=>toggleCaseReq(c.id,r.key);
-        row.append(cb,el('span',{text:r.label}));card.append(row);
+        row.append(cb,el('span',{text:r.label}));
+        if(r.key==='reply')row.append(el('button',{class:'small',text:'✉️ 返信草案',style:'margin-left:auto',onclick:ev=>{ev.preventDefault();ev.stopPropagation();openParentDlg(c.id);}}));
+        card.append(row);
       });
       box.append(card);
     });
@@ -3095,6 +3121,79 @@ $('lineSent').onchange=e=>{
   save();try{renderToday()}catch(e2){} toast(e.target.checked?'連絡済み（手動確認）にしました':'解除しました');
 };
 $('lineClose').onclick=()=>$('lineDlg').close();
+
+/* ---------------- P1 保護者への返信草案（欠席受付/振替候補/振替確定）＝草案・記録のみ。送信は人。---------------- */
+const PARENT_SIGN='＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n武蔵野個別指導塾\n~中受から高校受験、大学受験でワンランクアップを実現する~\n武蔵野市境2-2-3　渡辺ビル4Ｆ\nTEL　0422-27-7828\nFAX　0422-27-7829\nHP　https://www.musasinokobetu.com/';
+const WDJP=['日','月','火','水','木','金','土'];
+let parentCtx=null; // {caseId,studentName,subject,absLabel,tpl,when}
+function lessonDateLabel(l){
+  if(!l)return '';
+  const w=S.weeks.find(x=>x.id===l.weekId); if(!w||!w.startDate)return '';
+  const d=new Date(w.startDate+'T00:00:00'); d.setDate(d.getDate()+Number(l.day));
+  const sl=slotById(l.slotId);
+  return (d.getMonth()+1)+'月'+d.getDate()+'日（'+WDJP[d.getDay()]+'）'+(sl?sl.label+'～':'');
+}
+function familyName(name){ const n=(name||'').trim(); const m=n.match(/^[一-龥々ヶ]{1,4}/); return m?m[0]:n; }
+function buildParentMsg(ctx){
+  const tpl=ctx.tpl||'reply', stu=ctx.studentName||'', subPre=ctx.subject?(ctx.subject+'の'):'', when=(ctx.when||'').trim();
+  const L=[];
+  L.push(familyName(stu)+'様'); L.push('');
+  L.push('お世話になっております。武蔵野個別指導塾の藤田です。'); L.push('');
+  if(tpl==='reply'){
+    L.push('このたびは、'+stu+'さんの'+subPre+'授業'+(ctx.absLabel?('（'+ctx.absLabel+'）'):'')+'のお休みのご連絡をいただき、ありがとうございます。');
+    L.push('承知いたしました。振替につきましては、改めて候補日時をご案内いたします。');
+  }else if(tpl==='candidate'){
+    L.push(stu+'さんの'+subPre+'授業の振替につきまして、下記の日時ではご都合いかがでしょうか。'); L.push('');
+    L.push('・'+(when||'［要確認：候補日時］')); L.push('');
+    L.push('ご都合をお知らせいただけますでしょうか。');
+  }else{
+    L.push(stu+'さんの'+subPre+'授業の振替は、下記の日時で確定いたしました。'); L.push('');
+    L.push('・'+(when||'［要確認：確定日時］'));
+  }
+  L.push(''); L.push('どうぞよろしくお願いいたします。'); L.push(''); L.push(PARENT_SIGN);
+  return L.join('\n');
+}
+function parentDraftIssues(ctx){
+  const issues=[];
+  if(!(ctx.studentName||'').trim())issues.push('生徒名が空です');
+  if((ctx.tpl==='candidate'||ctx.tpl==='confirm')&&!(ctx.when||'').trim())issues.push('振替の日時が未入力です');
+  const m=((ctx.when||'')+' ').match(/(\d{1,2})月(\d{1,2})日[（(]([日月火水木金土])/);
+  if(m){
+    const now=new Date(); let dt=new Date(now.getFullYear(),Number(m[1])-1,Number(m[2]));
+    if((dt-now)/86400000 < -180) dt=new Date(now.getFullYear()+1,Number(m[1])-1,Number(m[2]));
+    const wd=WDJP[dt.getDay()];
+    if(wd!==m[3])issues.push(m[1]+'月'+m[2]+'日は「'+wd+'」曜です（入力は「'+m[3]+'」）。日付か曜日をご確認ください');
+  }
+  return issues;
+}
+function renderParentDraft(){
+  if(!parentCtx)return;
+  const tpl=(document.querySelector('input[name="parentTpl"]:checked')||{}).value||'reply';
+  parentCtx.tpl=tpl; parentCtx.when=$('parentWhen').value;
+  $('parentWhenWrap').style.display=(tpl==='reply')?'none':'';
+  $('parentText').value=buildParentMsg(parentCtx);
+  const iss=parentDraftIssues(parentCtx);
+  $('parentIssues').textContent=iss.length?('⚠ '+iss.join(' / ')):'';
+}
+function openParentDlg(caseId){
+  const c=(S.cases||[]).find(x=>x.id===caseId); if(!c)return;
+  const les=S.lessons.find(l=>l.id===c.lessonId);
+  parentCtx={caseId:c.id, studentName:c.studentName||'', subject:(les&&les.subject)||'', absLabel:lessonDateLabel(les)};
+  const d=$('caseDlg'); if(d)d.close();
+  const r=document.querySelector('input[name="parentTpl"][value="reply"]'); if(r)r.checked=true;
+  $('parentWhen').value='';
+  $('parentTarget').textContent='宛先：'+(c.studentName||'?')+'さんの保護者';
+  const rep=(c.requirements||[]).find(x=>x.key==='reply');
+  $('parentSent').checked=!!(rep&&rep.done);
+  renderParentDraft();
+  $('parentDlg').showModal();
+}
+document.querySelectorAll('input[name="parentTpl"]').forEach(r=>r.addEventListener('change',renderParentDraft));
+$('parentWhen')&&($('parentWhen').oninput=renderParentDraft);
+$('parentCopy')&&($('parentCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('parentText').value);toast('コピーしました。Gmail等に貼り、ご自身で送信してください');}catch(e){toast('コピーできませんでした。長押しで選択してください');}});
+$('parentShare')&&($('parentShare').onclick=async()=>{const t=$('parentText').value;if(navigator.share){try{await navigator.share({text:t});}catch(e){}}else{try{await navigator.clipboard.writeText(t);toast('共有非対応のためコピーしました');}catch(e){}}});
+$('parentSent')&&($('parentSent').onchange=e=>{ if(!parentCtx)return; const c=(S.cases||[]).find(x=>x.id===parentCtx.caseId); if(!c)return; const rep=(c.requirements||[]).find(x=>x.key==='reply'); if(rep&&rep.done!==e.target.checked)toggleCaseReq(c.id,'reply'); });
+$('parentClose')&&($('parentClose').onclick=()=>$('parentDlg').close());
 
 /* ---------------- 希望時間帯ダイアログ ---------------- */
 let prefEditingStudentId=null;
