@@ -1031,7 +1031,7 @@
 
 <!-- 同期の競合ダイアログ（同期版のみ使用。ローカル版では開かれない） -->
 <dialog id="caseDlg">
-  <div class="dlghead"><span>🗂 要対応案件（欠席→振替→連絡の完了管理）</span></div>
+  <div class="dlghead"><span>🗂 要対応（振替期限・二重予約NG・欠席連絡を集約）</span></div>
   <div class="dlgbody" style="gap:8px;max-height:70vh;overflow:auto"><div id="caseBox"></div></div>
   <div style="text-align:right;padding:8px"><button onclick="document.getElementById('caseDlg').close()">閉じる</button></div>
 </dialog>
@@ -1146,7 +1146,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.17.0';
+const APP_VER='2.18.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1746,7 +1746,7 @@ function renderGrid(){
   const nb=$('noticeBar');nb.innerHTML='';
   (S.settings.notices||[]).forEach(n=>nb.append(el('div',{text:'📌 備忘：'+n})));
   {const _t=getOpenTasks().length;nb.append(el('div',{class:'notice-task',style:'cursor:pointer;padding:2px 0;'+(_t?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openTaskInbox,text:'🗂 未処理案件：'+_t+'件（クリックで仕分け）'}));}
-  {const _oc=(typeof getOpenCases==='function'?getOpenCases().length:0);nb.append(el('div',{class:'notice-case',style:'cursor:pointer;padding:2px 0;'+(_oc?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openCaseBoard,text:'🗂 要対応案件：'+_oc+'件（欠席→振替→連絡）'}));}
+  {const _oc=(typeof getActionSummary==='function'?getActionSummary().total:0);nb.append(el('div',{class:'notice-case',style:'cursor:pointer;padding:2px 0;'+(_oc?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openCaseBoard,text:'🗂 要対応：'+_oc+'件（振替期限・二重予約・欠席連絡）'}));}
   const alert=$('gridDdlLine');alert.innerHTML='';
   let over=0,soon=0;
   S.lessons.filter(isActiveMakeup).forEach(l=>{
@@ -2704,6 +2704,13 @@ function ensureAbsenceCase(lesson){
     createdAt:new Date().toISOString(),status:'open',requirements:reqs});
 }
 function getOpenCases(){return (S.cases||[]).filter(c=>c.status!=='done');}
+// 要対応の集約：振替期限（3日以内/超過）＋監査違反（二重予約・NG・席超過）＋欠席案件を1本化
+function getActionSummary(){
+  const mk=(S.lessons||[]).filter(isActiveMakeup).map(l=>{const dl=deadlineOf(l);return {l,dl,left:dl?daysLeft(dl):null};}).filter(x=>x.left!=null&&x.left<=3).sort((a,b)=>a.left-b.left);
+  const tasks=(typeof getOpenTasks==='function')?getOpenTasks():[];
+  const cases=getOpenCases();
+  return {mk,tasks,cases,total:mk.length+tasks.length+cases.length};
+}
 function toggleCaseReq(caseId,key){
   const c=(S.cases||[]).find(x=>x.id===caseId);if(!c)return;
   const r=c.requirements.find(x=>x.key===key);if(!r)return;
@@ -2713,22 +2720,51 @@ function toggleCaseReq(caseId,key){
 }
 function renderCaseBoard(){
   const box=$('caseBox');if(!box)return;box.textContent='';
-  const open=getOpenCases();
-  if(!open.length)box.append(el('div',{text:'✅ 未完了の案件はありません。',style:'color:var(--sub);font-size:13px'}));
   const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'';};
-  open.forEach(c=>{
-    const les=S.lessons.find(l=>l.id===c.lessonId);
-    const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px'});
-    card.append(el('div',{text:'⚠ '+(c.studentName||'?')+'さん（欠席）'+(les?'：'+wn(les.weekId)+' '+(DAYS[les.day]||'')+'曜 '+(slotById(les.slotId)?slotById(les.slotId).label:''):''),style:'font-weight:600;color:var(--danger)'}));
-    c.requirements.forEach(r=>{
-      const row=el('label',{style:'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:3px;cursor:pointer'});
-      const cb=el('input',{type:'checkbox',style:'width:auto'});cb.checked=r.done;cb.onclick=()=>toggleCaseReq(c.id,r.key);
-      row.append(cb,el('span',{text:r.label}));card.append(row);
+  const sn=id=>{const s=studentById(id);return s?s.name:'(不明)';};
+  const sec=t=>el('div',{text:t,style:'font-weight:700;color:var(--danger);margin:8px 0 4px'});
+  const {mk,tasks,cases}=getActionSummary();
+  const gotoSwap=()=>{const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();};
+  // A. 振替期限（超過／3日以内）＝放置すると振替権利が失効する案件
+  if(mk.length){
+    box.append(sec('🔔 振替期限（要確定）：'+mk.length+'件'));
+    mk.forEach(x=>{
+      const les=x.l, sl=slotById(les.slotId);
+      const tag=x.left<0?('期限超過'+(-x.left)+'日'):(x.left===0?'本日期限':'あと'+x.left+'日');
+      const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px'});
+      card.append(el('div',{style:'font-weight:600',text:'⏰ '+sn(les.studentId)+'さん'+(les.subject?'（'+les.subject+'）':'')+'：'+wn(les.weekId)+' '+(DAYS[les.day]||'')+'曜 '+(sl?sl.label:'')}));
+      card.append(el('div',{style:'display:flex;justify-content:space-between;align-items:center;margin-top:3px;gap:8px'},
+        el('span',{style:'font-size:12px;color:'+(x.left<0?'var(--danger)':'var(--sub)'),text:'期限 '+(x.dl?fmtDate(x.dl):'-')+'（'+tag+'）'}),
+        el('button',{class:'small',text:'振替リストへ',onclick:gotoSwap})));
+      box.append(card);
     });
+  }
+  // B. 監査違反（二重予約・講師NG稼働・席超過）＝別画面の「未処理案件」をここにも集約
+  if(tasks.length){
+    box.append(sec('⚠ 二重予約・NG・席超過：'+tasks.length+'件'));
+    const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px'});
+    card.append(el('div',{style:'font-size:12px;color:var(--sub)',text:'枠の重複・講師NG稼働・席数超過が残っています。仕分けで解消してください。'}));
+    card.append(el('button',{class:'small',text:'仕分けを開く',style:'margin-top:6px',onclick:()=>{const d=$('caseDlg');if(d)d.close();if(typeof openTaskInbox==='function')openTaskInbox();}}));
     box.append(card);
-  });
+  }
+  // C. 欠席案件（既存：欠席→振替→連絡の消込）
+  if(cases.length){
+    box.append(sec('🗂 欠席→振替→連絡：'+cases.length+'件'));
+    cases.forEach(c=>{
+      const les=S.lessons.find(l=>l.id===c.lessonId);
+      const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px'});
+      card.append(el('div',{text:'⚠ '+(c.studentName||'?')+'さん（欠席）'+(les?'：'+wn(les.weekId)+' '+(DAYS[les.day]||'')+'曜 '+(slotById(les.slotId)?slotById(les.slotId).label:''):''),style:'font-weight:600;color:var(--danger)'}));
+      c.requirements.forEach(r=>{
+        const row=el('label',{style:'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:3px;cursor:pointer'});
+        const cb=el('input',{type:'checkbox',style:'width:auto'});cb.checked=r.done;cb.onclick=()=>toggleCaseReq(c.id,r.key);
+        row.append(cb,el('span',{text:r.label}));card.append(row);
+      });
+      box.append(card);
+    });
+  }
+  if(!mk.length&&!tasks.length&&!cases.length)box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
   const done=(S.cases||[]).filter(c=>c.status==='done').length;
-  if(done)box.append(el('div',{text:'（完了した案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
+  if(done)box.append(el('div',{text:'（完了した欠席案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
 }
 function openCaseBoard(){renderCaseBoard();const d=$('caseDlg');if(d&&d.showModal)d.showModal();}
 // ── Phase 4：講師SPOF可視化（この講師が抜けたら何コマ・何名が被弾し、同科目の代替講師は何人いるか）──
