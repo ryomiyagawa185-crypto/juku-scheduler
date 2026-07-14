@@ -1167,7 +1167,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.23.0';
+const APP_VER='2.24.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1480,6 +1480,7 @@ function load(){
   try{updateStorageMeter(new Blob([JSON.stringify(S)]).size)}catch(e){}
 }
 const LS_PREV=LS_KEY+'.prev', LS_META=LS_KEY+'.meta';
+let _saveFailed=false; // #2 保存失敗（容量超過等）の持続状態＝握り潰さない
 // localStorageへ安全に書く：直前版をprevへ退避してから本体を書く＋メタ記録＋容量ガード（パネル総意）
 function persistLocal(text){
   try{
@@ -1499,10 +1500,15 @@ function persistLocal(text){
     if(old&&old!==text){try{localStorage.setItem(LS_PREV,old)}catch(e){}}
     localStorage.setItem(LS_KEY,text);
     try{localStorage.setItem(LS_META,JSON.stringify({savedAt:new Date().toISOString(),bytes}))}catch(e){}
+    _saveFailed=false; // #2 保存成功→失敗状態を解除
     updateStorageMeter(bytes);
     return true;
   }catch(e){
-    toast('⚠ この端末に保存できませんでした（容量オーバーの可能性）。「JSON書き出し」でバックアップし、古い記録を整理してください');
+    // #2 保存失敗を握り潰さない：赤メーターで持続表示＋初回のみ強い警告（同期版・ローカル版の両save()から呼ばれる）
+    const wasFailed=_saveFailed; _saveFailed=true;
+    try{updateStorageMeter(new Blob([text]).size)}catch(_e){}
+    if(!wasFailed)alert('⚠ この端末に保存できませんでした（容量超過の可能性）。\n\n直前の変更はまだ保存されていません。「データ・書き出し → JSON書き出し」でバックアップし、古い週を整理（削除/年度アーカイブ）してください。');
+    else toast('⚠ まだ保存できていません（容量超過）。バックアップと整理をしてください');
     return false;
   }
 }
@@ -1514,6 +1520,12 @@ function recoverState(){
 }
 function updateStorageMeter(bytes){
   const el=document.getElementById('storageMeter'); if(!el)return;
+  if(_saveFailed){ // #2 保存失敗は最優先で持続表示（握り潰さない）
+    el.textContent='⚠ 保存失敗';
+    el.title='この端末に保存できていません（容量超過の可能性）。JSON書き出しでバックアップし、古い週を整理してください';
+    el.className='storagemeter danger';
+    return;
+  }
   const mb=(bytes/1024/1024), pct=Math.min(100,Math.round(mb/5*100));
   el.textContent=`💾 ${mb.toFixed(2)}MB`;
   el.title=`保存データ量：${mb.toFixed(2)}MB / 約5MB（${pct}%）`;
