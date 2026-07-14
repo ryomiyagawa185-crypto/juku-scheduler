@@ -1172,6 +1172,7 @@
   <div class="dlghead"><span>📘 授業メモ（引き継ぎ表に自動反映）</span></div>
   <div class="dlgbody" style="gap:8px">
     <div id="smemoTarget" style="font-size:15px;font-weight:700"></div>
+    <div id="smemoPrev" style="font-size:12px;color:var(--sub);border:1px dashed var(--line);border-radius:8px;padding:6px"></div>
     <label style="font-size:12px;color:var(--sub)">進度<input type="text" id="smProgress" placeholder="例：二次方程式の解の公式まで" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
     <label style="font-size:12px;color:var(--sub)">宿題<input type="text" id="smHomework" placeholder="例：p42-43" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
     <label style="font-size:12px;color:var(--sub)">理解度<input type="text" id="smUnderstanding" placeholder="例：因数分解に不安" style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></label>
@@ -1217,7 +1218,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.32.0';
+const APP_VER='2.33.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -3358,6 +3359,14 @@ function renderTodaySummary(){
   box.append(wrap);
 }
 let smemoLid=null;
+function smemoHasContent(m){ return !!(m&&(m.progress||m.homework||m.understanding||m.next)); }
+function prevSmemoFor(l){ // N3 同じ生徒の直近（当該コマより前）のsmemo
+  const dOf=x=>{const w=S.weeks.find(w=>w.id===x.weekId);if(!w||!w.startDate)return null;const d=new Date(w.startDate+'T00:00:00');d.setDate(d.getDate()+Number(x.day));return d;};
+  const cur=dOf(l); if(!cur)return null;
+  const cand=(S.lessons||[]).filter(x=>x&&x.studentId===l.studentId&&x.id!==l.id&&smemoHasContent(x.smemo))
+    .map(x=>({x,d:dOf(x)})).filter(o=>o.d&&o.d<cur).sort((a,b)=>b.d-a.d);
+  return cand.length?cand[0]:null;
+}
 function openSmemoDlg(id){
   const l=S.lessons.find(x=>x.id===id); if(!l)return; smemoLid=id;
   const stu=studentById(l.studentId), sl=slotById(l.slotId);
@@ -3365,6 +3374,15 @@ function openSmemoDlg(id){
   const m=l.smemo||{};
   $('smProgress').value=m.progress||''; $('smHomework').value=m.homework||'';
   $('smUnderstanding').value=m.understanding||''; $('smNext').value=m.next||'';
+  // N3 前回メモを即表示（授業前の確認時短・引き継ぎ漏れ防止）
+  const pbox=$('smemoPrev'); if(pbox){ pbox.innerHTML='';
+    const pv=prevSmemoFor(l);
+    if(pv){ const pm=pv.x.smemo, d=pv.d;
+      pbox.append(el('div',{style:'font-weight:600',text:'前回（'+(d.getMonth()+1)+'/'+d.getDate()+(pv.x.subject?'・'+pv.x.subject:'')+'）'}));
+      [['progress','進度'],['homework','宿題'],['understanding','理解度'],['next','次回']].forEach(([k,lab])=>{ if(pm[k])pbox.append(el('div',{text:'　'+lab+'：'+pm[k]})); });
+      pbox.append(el('button',{class:'small',style:'margin-top:4px',text:'前回を雛形に',onclick:()=>{$('smProgress').value=pm.progress||'';$('smHomework').value=pm.homework||'';$('smUnderstanding').value=pm.understanding||'';$('smNext').value=pm.next||'';}}));
+    } else pbox.textContent='前回メモなし';
+  }
   $('smemoDlg').showModal();
 }
 $('smemoSave')&&($('smemoSave').onclick=()=>{
