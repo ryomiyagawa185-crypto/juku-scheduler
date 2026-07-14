@@ -181,7 +181,8 @@
   .freshbadge.fb-stale{background:#fdecec;color:#dc2626;font-weight:600}
   .freshbadge.fb-unknown{background:#f3f4f6;color:#6b7280}
   .freshbanner{background:#fdecec;color:#b91c1c;font-size:12px;padding:6px 12px;border-bottom:1px solid #f3c6c6}
-  @media(max-width:700px){.freshbadge{font-size:10px;padding:2px 6px}}
+  .pastweekbadge{font-size:11px;padding:3px 8px;border-radius:12px;white-space:nowrap;background:#eef1f6;color:#6b7280}
+  @media(max-width:700px){.freshbadge,.pastweekbadge{font-size:10px;padding:2px 6px}}
   /* 授業の移動（D&D／タップ移動） */
   td.cell.dragging{opacity:.4}
   td.cell.drop-hover{outline:2px dashed var(--accent);outline-offset:-2px}
@@ -495,6 +496,7 @@
     <button id="btnEditWeek" class="small" title="週の名前・開始日を変更">✎</button>
     <span id="storageMeter" class="storagemeter" title="保存データ量"></span>
     <span id="freshBadge" class="freshbadge fb-unknown" title="データの基準日時。クリックで最新を確認"></span>
+    <span id="pastWeekBadge" class="pastweekbadge" style="display:none" title="過去週（編集は確認が入ります）"></span>
     <button id="btnUndo" class="ghost small" disabled title="元に戻せる操作はありません">↩ 元に戻す</button>
     <button id="btnRedo" class="ghost small" disabled title="やり直せる操作はありません">↪</button>
     <button id="btnHelp" class="ghost small" title="使い方マニュアルを開く">❓ 使い方</button>
@@ -1165,7 +1167,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.22.0';
+const APP_VER='2.23.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1943,6 +1945,7 @@ function startMove(lessonId){
 function cancelMove(){moveMode=null;const b=$('moveBanner');if(b)b.style.display='none';renderGrid();}
 function doMoveTo(slotId,teacherId,lessonId){
   if(!guardFresh('授業の移動'))return;
+  if(!guardPastWeek('授業の移動'))return;
   const mid=lessonId||moveMode;
   const l=S.lessons.find(x=>x.id===mid); if(!l){cancelMove();return;}
   const w=curWeek(), day=S.ui.day, t=teacherById(teacherId), sl=slotById(slotId);
@@ -2082,6 +2085,7 @@ function collectHardBlocks(weekId,day,slotId,studentId,excludeId){
 $('lessonForm').addEventListener('submit',ev=>{
   ev.preventDefault();
   if(!guardFresh('授業の追加・変更')){return;}
+  if(!guardPastWeek('授業の追加・変更'))return;
   const name=$('fStudent').value.trim();
   if(!name){$('fStudent').focus();return}
   // 編集中の授業の生徒はIDで維持（同名の別人への付け替わり防止）
@@ -4294,8 +4298,25 @@ function guardFresh(actionLabel){
   return confirm('⚠ データが'+(f.ageH!=null?Math.round(f.ageH)+'時間':'かなり')+'前のものです（基準 '+fmtWhen(f.base)+'）。\n最新シートに変更があるかもしれません。\n\n「'+actionLabel+'」を続けますか？');
 }
 $('freshBadge')&&($('freshBadge').onclick=checkinFresh);
+// ── B⑥ 週締めロック（ソフト）：過去週（週末が今日より前）は編集時に確認を挟む。ハードロックしない＝振替対応のため ──
+function isPastWeek(w){
+  if(!w||!w.startDate)return false;
+  const end=new Date(w.startDate+'T00:00:00'); end.setDate(end.getDate()+6);
+  return end < todayMid(); // 週末（日曜）が今日より前＝過去週
+}
+function guardPastWeek(actionLabel){
+  const w=(typeof curWeek==='function')?curWeek():null;
+  if(!isPastWeek(w))return true;
+  return confirm('🔒 この週（'+(w.name||'')+'）は既に過ぎた過去週です。\n過去の記録を変更しようとしています（振替の後追い等で必要な場合のみ）。\n\n「'+actionLabel+'」を続けますか？');
+}
+function renderPastWeekBadge(){
+  const el0=$('pastWeekBadge'); if(!el0)return;
+  const w=(typeof curWeek==='function')?curWeek():null;
+  if(isPastWeek(w)){el0.style.display='';el0.textContent='🔒 過去週';}
+  else el0.style.display='none';
+}
 function renderAll(){
-  renderWeekBar();renderGrid();renderMasters();renderDatalists();renderSearchControls();renderSwap();renderFreshness();
+  renderWeekBar();renderGrid();renderMasters();renderDatalists();renderSearchControls();renderSwap();renderFreshness();renderPastWeekBadge();
 }
 // 今日ビュー：現在/次コマが時間で変わるので、表示中は1分ごと＋復帰時に再描画
 const todayActive=()=>{const v=document.getElementById('view-today');return v&&v.classList.contains('active');};
