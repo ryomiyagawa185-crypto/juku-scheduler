@@ -1202,7 +1202,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.26.0';
+const APP_VER='2.27.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -2558,15 +2558,18 @@ function renderAuditReport(){
   const place=x=>`${wn(x.weekId)}・${DAYS[Number(x.day)]||x.day}曜・${sl(x.slotId)}`;
   const byDate=(a,b)=>((wk(a.weekId)||{}).startDate||'').localeCompare((wk(b.weekId)||{}).startDate||'')||Number(a.day)-Number(b.day);
   const tdup=r.teacherDup||[], tng=r.teacherNG||[];
+  const tag=x=>isOperationalWeek(x.weekId)?'':'（過去・修正不要）'; // P3 過去週は明示ラベル
+  const pastN=[...r.studentDup,...tdup,...r.overCap].filter(x=>!isOperationalWeek(x.weekId)).length; // teacherNGは今日以降のみ
   box.textContent='';
   if(!r.studentDup.length&&!r.overCap.length&&!tdup.length&&!tng.length){box.append(el('div',{text:'✅ 二重予約・席超過・講師NGはありません。',style:'color:var(--sub);font-size:13px'}));return;}
+  if(pastN)box.append(el('div',{text:`ℹ️ うち過去週（終了済み・修正不要）：${pastN}件（要対応ボードには出しません）`,style:'font-size:12px;color:var(--sub);margin-bottom:6px'}));
   if(r.studentDup.length){
     box.append(el('div',{text:`⚠ 生徒二重予約 ${r.studentDup.length}件`,style:'font-weight:600;color:var(--danger);margin-top:4px'}));
-    r.studentDup.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${sn(x.studentId)}｜${x.count}件`,style:'font-size:12px'})));
+    r.studentDup.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${sn(x.studentId)}｜${x.count}件${tag(x)}`,style:'font-size:12px'})));
   }
   if(tdup.length){
     box.append(el('div',{text:`⚠ 講師二重予約 ${tdup.length}件`,style:'font-weight:600;color:var(--danger);margin-top:8px'}));
-    tdup.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${tn(x.teacherId)}先生｜${x.count}件`,style:'font-size:12px'})));
+    tdup.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${tn(x.teacherId)}先生｜${x.count}件${tag(x)}`,style:'font-size:12px'})));
   }
   if(tng.length){
     box.append(el('div',{text:`⚠ 講師NG稼働（今日以降）${tng.length}件`,style:'font-weight:600;color:var(--danger);margin-top:8px'}));
@@ -2574,7 +2577,7 @@ function renderAuditReport(){
   }
   if(r.overCap.length){
     box.append(el('div',{text:`⚠ 席超過（上限${STUDIO_CAP}名）${r.overCap.length}件`,style:'font-weight:600;color:var(--danger);margin-top:8px'}));
-    r.overCap.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${x.count}名`,style:'font-size:12px'})));
+    r.overCap.sort(byDate).forEach(x=>box.append(el('div',{text:`・${place(x)}｜${x.count}名${tag(x)}`,style:'font-size:12px'})));
   }
 }
 // ── 未処理案件（監査で検出した二重予約・席超過を「削除で解消／対応不要」で仕分ける）──
@@ -2583,7 +2586,8 @@ function getOpenTasks(){
   if(typeof auditDoubleBookings!=='function')return [];
   const dismissed=new Set(S.settings&&S.settings.auditDismissed||[]);
   const r=auditDoubleBookings(); const tasks=[];
-  const add=(kind,x,sig)=>{if(!dismissed.has(sig))tasks.push(Object.assign({sig,kind},x));};
+  // P3 過去週（終了済み・修正不要）は要対応から除外。teacherNGは既に今日以降のみ。
+  const add=(kind,x,sig)=>{if(!dismissed.has(sig)&&isOperationalWeek(x.weekId))tasks.push(Object.assign({sig,kind},x));};
   r.studentDup.forEach(x=>add('dup',x,'dup|'+x.weekId+'|'+x.day+'|'+x.slotId+'|'+x.studentId));
   (r.teacherDup||[]).forEach(x=>add('tdup',x,'tdup|'+x.weekId+'|'+x.day+'|'+x.slotId+'|'+x.teacherId));
   (r.teacherNG||[]).forEach(x=>add('tng',x,'tng|'+x.weekId+'|'+x.day+'|'+x.slotId+'|'+x.teacherId));
@@ -4432,6 +4436,8 @@ function isPastWeek(w){
   const end=new Date(w.startDate+'T00:00:00'); end.setDate(end.getDate()+6);
   return end < todayMid(); // 週末（日曜）が今日より前＝過去週
 }
+// P3 運用週＝終了していない週（週末≥今日）。要対応ボードは運用週だけを対象にし、終了済み過去週のノイズを外す。
+function isOperationalWeek(weekId){ const w=S.weeks.find(x=>x.id===weekId); return !!(w && !isPastWeek(w)); }
 function guardPastWeek(actionLabel){
   const w=(typeof curWeek==='function')?curWeek():null;
   if(!isPastWeek(w))return true;
