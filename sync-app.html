@@ -731,7 +731,8 @@
       <div class="mbox">
         <h3>講師（<span id="tCount"></span>名）
           <button id="btnRegTeacher" class="primary small" style="margin-left:10px">＋ 新しい講師を登録</button>
-          <button id="btnSubjAudit" class="small" style="margin-left:6px">🧑‍🏫 担当科目を実績で点検</button></h3>
+          <button id="btnSubjAudit" class="small" style="margin-left:6px">🧑‍🏫 担当科目を実績で点検</button>
+          <button id="btnSPOF" class="small" style="margin-left:6px">🚨 講師の代替リスク</button></h3>
         <table class="mtable" id="teacherTable"></table>
       </div>
       <div class="mbox">
@@ -1027,6 +1028,16 @@
 </dialog>
 
 <!-- 同期の競合ダイアログ（同期版のみ使用。ローカル版では開かれない） -->
+<dialog id="caseDlg">
+  <div class="dlghead"><span>🗂 要対応案件（欠席→振替→連絡の完了管理）</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:70vh;overflow:auto"><div id="caseBox"></div></div>
+  <div style="text-align:right;padding:8px"><button onclick="document.getElementById('caseDlg').close()">閉じる</button></div>
+</dialog>
+<dialog id="spofDlg">
+  <div class="dlghead"><span>🚨 講師の代替リスク（SPOF可視化）</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:70vh;overflow:auto"><div id="spofBox"></div></div>
+  <div style="text-align:right;padding:8px"><button onclick="document.getElementById('spofDlg').close()">閉じる</button></div>
+</dialog>
 <dialog id="handoverDlg">
   <div class="dlghead"><span>📋 授業引き継ぎ表（LINE用）</span></div>
   <div class="dlgbody" style="gap:8px">
@@ -1133,7 +1144,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.16.2';
+const APP_VER='2.17.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1265,6 +1276,7 @@ function applyMigrations(){
   if(!Array.isArray(S.subjects))S.subjects=[];
   if(!Array.isArray(S.slots)||!S.slots.length)S.slots=[];
   if(!Array.isArray(S.holds))S.holds=[];
+  if(!Array.isArray(S.cases))S.cases=[]; // Phase 3：案件（欠席→振替→連絡の完了状態）
   // 朝2コマ（夏時間割用）をmasterに補完し、master順に整える（既存データの移行）
   SLOT_MASTER.forEach(m=>{if(!S.slots.some(s=>s.id===m.id))S.slots.push({...m})});
   {const _o=id=>{const i=SLOT_MASTER.findIndex(m=>m.id===id);return i<0?99:i};
@@ -1643,7 +1655,7 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show')
 
 /* ---------------- 変更履歴（Undo）：スナップショット方式・メモリ内のみ（localStorage/GAS同期に干渉しない） ---------------- */
 let undoStack=[], redoStack=[];
-const UNDO_COLS=['lessons','holds','students','teachers','ngOverrides','slotOverrides','subjects','weeks'];
+const UNDO_COLS=['lessons','holds','students','teachers','ngOverrides','slotOverrides','subjects','weeks','cases'];
 function snapshotState(){const o={};UNDO_COLS.forEach(k=>o[k]=JSON.parse(JSON.stringify(S[k]||[])));return o;}
 // 変更前に呼ぶ：現在の状態（授業・仮押さえ・生徒/講師マスタ・NG設定）を退避。新規変更はRedoを無効化
 function pushUndo(label){undoStack.push({label:label||'変更',state:snapshotState()});if(undoStack.length>20)undoStack.shift();redoStack=[];updateUndoBtn();}
@@ -1887,6 +1899,7 @@ function renderGrid(){
   const nb=$('noticeBar');nb.innerHTML='';
   (S.settings.notices||[]).forEach(n=>nb.append(el('div',{text:'📌 備忘：'+n})));
   {const _t=getOpenTasks().length;nb.append(el('div',{class:'notice-task',style:'cursor:pointer;padding:2px 0;'+(_t?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openTaskInbox,text:'🗂 未処理案件：'+_t+'件（クリックで仕分け）'}));}
+  {const _oc=(typeof getOpenCases==='function'?getOpenCases().length:0);nb.append(el('div',{class:'notice-case',style:'cursor:pointer;padding:2px 0;'+(_oc?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openCaseBoard,text:'🗂 要対応案件：'+_oc+'件（欠席→振替→連絡）'}));}
   const alert=$('gridDdlLine');alert.innerHTML='';
   let over=0,soon=0;
   S.lessons.filter(isActiveMakeup).forEach(l=>{
@@ -2065,13 +2078,15 @@ function doMoveTo(slotId,teacherId,lessonId){
   const w=curWeek(), day=S.ui.day, t=teacherById(teacherId), sl=slotById(slotId);
   if(l.day===day&&l.slotId===slotId&&l.teacherId===teacherId){cancelMove();return;} // 同じ場所
   const target=lessonAt(w.id,day,slotId,teacherId);
-  const warns=[];
+  const warns=[], hard=[];
   const blk=slotBlocked(w.id,day,teacherId,slotId);
   if(blk)warns.push(`${t.name}先生は${DAYS[day]}曜${sl?sl.label:''}に入れません（${blk}）`);
-  if(lessonsAt(w.id,day,slotId).some(x=>x.id!==l.id&&x.id!==(target&&target.id)&&x.studentId===l.studentId))
-    warns.push('この生徒は同じ時間帯に別の授業があります');
+  if(lessonsAt(w.id,day,slotId).some(x=>x.id!==l.id&&x.id!==(target&&target.id)&&x.studentId===l.studentId)){
+    const stu=studentById(l.studentId);
+    hard.push(`⛔ ${stu?stu.name:'この生徒'}さんは同じ時間帯に別の授業があります（生徒の二重予約）`);}
   {const set=new Set();S.lessons.forEach(x=>{if(x.weekId===w.id&&x.day===day&&x.slotId===slotId&&x.id!==l.id&&x.studentId)set.add(x.studentId)});set.add(l.studentId);
-   if(!target&&set.size>STUDIO_CAP)warns.push(`この時間帯は${set.size}名になります（教室席数の上限${STUDIO_CAP}名）`);}
+   if(!target&&set.size>STUDIO_CAP)hard.push(`⛔ この時間帯は${set.size}名になり、教室席数の上限${STUDIO_CAP}名を超えます（席超過）`);}
+  if(hard.length){alert('⛔ この移動はできません：\n\n'+hard.join('\n')+'\n\n（生徒の二重予約・席上限は越えられません。別の枠へ移してください）');return;}
   let swap=false;
   if(target){
     const ts=studentById(target.studentId);
@@ -2181,6 +2196,18 @@ function collectWarnings(lesson){
      warn.push(`⚠ この時間帯（${DAYS[lesson.day]}曜 ${slotById(lesson.slotId)?slotById(lesson.slotId).label:''}）は${set.size}名になります。教室の席数上限（${STUDIO_CAP}名）を超えます`);}
   return warn;
 }
+// ── Phase 2 ハードストップ：生徒二重予約・席超過は"越えられない制約"として保存/移動を拒否 ──
+function collectHardBlocks(weekId,day,slotId,studentId,excludeId){
+  const hard=[];
+  const stuDup=lessonsAt(weekId,day,slotId).find(l=>l.id!==excludeId&&l.studentId===studentId);
+  if(stuDup){const t2=teacherById(stuDup.teacherId),stu=studentById(studentId);
+    hard.push(`⛔ ${stu?stu.name:'この生徒'}さんは同じ時間帯に${t2?t2.name:'別'}先生の授業があります（生徒の二重予約）`);}
+  const set=new Set();
+  S.lessons.forEach(l=>{if(l.weekId===weekId&&l.day===day&&l.slotId===slotId&&l.id!==excludeId&&l.studentId)set.add(l.studentId)});
+  set.add(studentId);
+  if(set.size>STUDIO_CAP)hard.push(`⛔ この枠は${set.size}名になり、教室席数の上限${STUDIO_CAP}名を超えます（席超過）`);
+  return hard;
+}
 $('lessonForm').addEventListener('submit',ev=>{
   ev.preventDefault();
   const name=$('fStudent').value.trim();
@@ -2208,6 +2235,8 @@ $('lessonForm').addEventListener('submit',ev=>{
     teacherId:$('fTeacher').value, studentId:stu.id,
     subject, status:$('fStatus').value, memo:$('fMemo').value.trim()
   };
+  const hard=collectHardBlocks(lesson.weekId,lesson.day,lesson.slotId,lesson.studentId,lesson.id);
+  if(hard.length){alert('⛔ この内容は保存できません：\n\n'+hard.join('\n')+'\n\n（生徒の二重予約・席上限は越えられません。別の講師/時間帯にしてください）');return;}
   const warns=collectWarnings(lesson);
   if(pendingResolveId){
     const orig=S.lessons.find(l=>l.id===pendingResolveId);
@@ -2816,6 +2845,68 @@ function genHandover(){
   const mode=(document.querySelector('input[name="hoMode"]:checked')||{}).value||'kotai';
   $('hoText').value=buildHandoverSheet(sid,tid,mode,cur);
 }
+// ── Phase 3：案件(case)モデル＝欠席→振替→連絡の"完了状態"を追う（既存の要振替フローと併存、連絡の消込を担う）──
+function ensureAbsenceCase(lesson){
+  if(!Array.isArray(S.cases))S.cases=[];
+  if(S.cases.some(c=>c.type==='absence'&&c.lessonId===lesson.id&&c.status!=='done'))return;
+  const stu=studentById(lesson.studentId);
+  const reqs=[{key:'reply',label:'保護者へ返信',done:false}];
+  if(lesson.status==='要振替')reqs.push({key:'makeup',label:'振替を確定',done:false});
+  reqs.push({key:'notify',label:'講師へ連絡',done:false});
+  S.cases.push({id:uid(),type:'absence',lessonId:lesson.id,studentId:lesson.studentId,studentName:stu?stu.name:'',
+    createdAt:new Date().toISOString(),status:'open',requirements:reqs});
+}
+function getOpenCases(){return (S.cases||[]).filter(c=>c.status!=='done');}
+function toggleCaseReq(caseId,key){
+  const c=(S.cases||[]).find(x=>x.id===caseId);if(!c)return;
+  const r=c.requirements.find(x=>x.key===key);if(!r)return;
+  pushUndo('案件：'+r.label);r.done=!r.done;
+  c.status=c.requirements.every(x=>x.done)?'done':'open';
+  save();renderAll();renderCaseBoard();
+}
+function renderCaseBoard(){
+  const box=$('caseBox');if(!box)return;box.textContent='';
+  const open=getOpenCases();
+  if(!open.length)box.append(el('div',{text:'✅ 未完了の案件はありません。',style:'color:var(--sub);font-size:13px'}));
+  const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'';};
+  open.forEach(c=>{
+    const les=S.lessons.find(l=>l.id===c.lessonId);
+    const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px'});
+    card.append(el('div',{text:'⚠ '+(c.studentName||'?')+'さん（欠席）'+(les?'：'+wn(les.weekId)+' '+(DAYS[les.day]||'')+'曜 '+(slotById(les.slotId)?slotById(les.slotId).label:''):''),style:'font-weight:600;color:var(--danger)'}));
+    c.requirements.forEach(r=>{
+      const row=el('label',{style:'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:3px;cursor:pointer'});
+      const cb=el('input',{type:'checkbox',style:'width:auto'});cb.checked=r.done;cb.onclick=()=>toggleCaseReq(c.id,r.key);
+      row.append(cb,el('span',{text:r.label}));card.append(row);
+    });
+    box.append(card);
+  });
+  const done=(S.cases||[]).filter(c=>c.status==='done').length;
+  if(done)box.append(el('div',{text:'（完了した案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
+}
+function openCaseBoard(){renderCaseBoard();const d=$('caseDlg');if(d&&d.showModal)d.showModal();}
+// ── Phase 4：講師SPOF可視化（この講師が抜けたら何コマ・何名が被弾し、同科目の代替講師は何人いるか）──
+function teacherSPOF(){
+  const p2=x=>String(x).padStart(2,'0'),now=new Date(),todayISO=now.getFullYear()+'-'+p2(now.getMonth()+1)+'-'+p2(now.getDate());
+  const lISO=l=>{const w=S.weeks.find(x=>x.id===l.weekId);if(!w||!w.startDate)return null;const d=new Date(w.startDate+'T00:00:00');d.setDate(d.getDate()+Number(l.day));return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());};
+  const canN=t=>new Set((t.subjects||[]).map(s=>(typeof normSubject==='function')?normSubject(s):s).filter(Boolean));
+  const per={};
+  S.lessons.forEach(l=>{if(l.teacherId==null)return;const iso=lISO(l);if(!iso||iso<todayISO)return;const o=per[l.teacherId]=per[l.teacherId]||{coma:0,stu:new Set(),subj:new Set()};o.coma++;if(l.studentId)o.stu.add(l.studentId);const n=(typeof normSubject==='function')?normSubject(l.subject):null;if(n)o.subj.add(n);});
+  return Object.entries(per).map(([tid,o])=>{
+    const t=S.teachers.find(x=>x.id===tid);let minAlt=Infinity;
+    o.subj.forEach(sub=>{const alt=S.teachers.filter(x=>x.id!==tid&&!x.inactive&&canN(x).has(sub)).length;if(alt<minAlt)minAlt=alt;});
+    return {name:t?t.name:'?',coma:o.coma,stu:o.stu.size,subj:[...o.subj].join('・'),minAlt:isFinite(minAlt)?minAlt:'-'};
+  }).sort((a,b)=>b.coma-a.coma);
+}
+function renderSPOF(){
+  const box=$('spofBox');if(!box)return;box.textContent='';
+  box.append(el('div',{text:'今日以降、各講師が抜けた場合の被弾（コマ・生徒数）と同科目の代替講師数。代替0〜1名は複線化（採用/育成）の候補。',style:'font-size:12px;color:var(--sub);margin-bottom:6px'}));
+  teacherSPOF().forEach(r=>{
+    const risk=(r.minAlt===0||r.minAlt===1);
+    box.append(el('div',{style:'font-size:13px;padding:3px 0;border-bottom:1px solid var(--line);'+(risk?'color:var(--danger);font-weight:600':''),
+      text:`${r.name}先生：被弾 ${r.coma}コマ・${r.stu}名／科目[${r.subj||'—'}]／代替講師 最小${r.minAlt}名`+(risk?' ⚠複線化推奨':'')}));
+  });
+}
+function openSPOF(){renderSPOF();const d=$('spofDlg');if(d&&d.showModal)d.showModal();}
 let bwPlan=null, bsPlan=null;
 function renderBulkControls(){
   const ws=sortedWeeks();
@@ -2975,6 +3066,7 @@ function markAbsent(id){
   if(!confirm((stu?stu.name:'この生徒')+'さん・'+(sl?sl.label:'')+' を欠席にしますか？'))return;
   pushUndo('欠席');l.att='欠席';
   if(confirm('振替が必要ですか？\nOK＝「要振替」にして振替リストに入れる／キャンセル＝欠席のみ'))l.status='要振替';
+  if(typeof ensureAbsenceCase==='function')ensureAbsenceCase(l); // Phase 3：欠席から案件を自動生成
   save();renderToday();renderGrid();try{renderSwap()}catch(e){} toast('欠席にしました（↩で戻せます）');
 }
 
@@ -4104,6 +4196,7 @@ $('importFile').onchange=e=>{
 };
 $('btnAudit')&&($('btnAudit').onclick=renderAuditReport);
 $('btnSubjAudit')&&($('btnSubjAudit').onclick=openSubjectAudit);
+$('btnSPOF')&&($('btnSPOF').onclick=openSPOF);
 $('btnHandover')&&($('btnHandover').onclick=openHandover);
 $('hoGen')&&($('hoGen').onclick=genHandover);
 $('hoCopy')&&($('hoCopy').onclick=async()=>{const t=$('hoText').value;if(!t)return;if(navigator.share){try{await navigator.share({text:t});return;}catch(e){}}try{await navigator.clipboard.writeText(t);toast('コピーしました。LINEに貼り付けてください');}catch(e){}});
