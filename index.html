@@ -1215,7 +1215,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.28.0';
+const APP_VER='2.29.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -2901,11 +2901,17 @@ function renderCaseBoard(){
       const les=S.lessons.find(l=>l.id===c.lessonId);
       const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px'});
       card.append(el('div',{text:'⚠ '+(c.studentName||'?')+'さん（欠席）'+(les?'：'+wn(les.weekId)+' '+(DAYS[les.day]||'')+'曜 '+(slotById(les.slotId)?slotById(les.slotId).label:''):''),style:'font-weight:600;color:var(--danger)'}));
+      if(les)card.append(el('button',{class:'small',text:'📅 このコマへ',style:'margin:2px 0',onclick:()=>{S.ui.weekId=les.weekId;S.ui.day=les.day;const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="grid"]');if(b)b.click();}})); // P4 当該コマへ1タップ
       c.requirements.forEach(r=>{
         const row=el('label',{style:'display:flex;gap:6px;align-items:center;font-size:13px;margin-top:3px;cursor:pointer'});
         const cb=el('input',{type:'checkbox',style:'width:auto'});cb.checked=r.done;cb.onclick=()=>toggleCaseReq(c.id,r.key);
         row.append(cb,el('span',{text:r.label}));
-        if(r.key==='reply')row.append(el('button',{class:'small',text:'✉️ 返信草案',style:'margin-left:auto',onclick:ev=>{ev.preventDefault();ev.stopPropagation();openParentDlg(c.id);}}));
+        // P4 各要件に実行ボタン（案件を「チェックだけ」から「実行ハブ」へ）。送信は人。
+        let btn=null;
+        if(r.key==='reply')btn=el('button',{class:'small',text:'✉️ 返信草案',onclick:ev=>{ev.preventDefault();ev.stopPropagation();openParentDlg(c.id);}});
+        else if(r.key==='makeup')btn=el('button',{class:'small',text:'🔁 振替候補',onclick:ev=>{ev.preventDefault();ev.stopPropagation();const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();}});
+        else if(r.key==='notify')btn=el('button',{class:'small',text:(les&&les.notified)?'📨 LINE済（再送）':'📨 講師へLINE',onclick:ev=>{ev.preventDefault();ev.stopPropagation();const d=$('caseDlg');if(d)d.close();if(c.lessonId)openLineDlg(c.lessonId);}});
+        if(btn){btn.style.marginLeft='auto';row.append(btn);}
         card.append(row);
       });
       box.append(card);
