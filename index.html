@@ -812,6 +812,13 @@
         <p style="font-size:11px;color:var(--sub);margin-top:6px">※書き出したファイルは復元用の唯一のバックアップです。必ず保存してください。</p>
       </div>
       <div class="card">
+        <h3>🎫 集客（確保枠・体験パイプライン）</h3>
+        <p>体験・新規入塾を受けられる席を毎週確保し、埋まりかけを今日画面と要対応でお知らせします。体験問い合わせは進行管理できます。</p>
+        <button id="btnReserve" class="primary">🎫 確保枠を設定する</button>
+        <button id="btnTrial" style="margin-left:6px">🎓 体験・新規パイプライン</button>
+        <button id="btnDemand" style="margin-left:6px">📊 需給ヒートマップ</button>
+      </div>
+      <div class="card">
         <h3>🔍 二重予約・席超過の監査</h3>
         <p style="font-size:12px;color:var(--sub)">取込済みの全データを走査し、同じ枠に同一生徒が二重、または席上限（<span id="auditCap"></span>名）超過がないか点検します（配置時チェックをすり抜けた既存重複を検出）。</p>
         <button id="btnAudit">二重予約を監査する</button>
@@ -1216,6 +1223,40 @@
   <div class="dlgfoot"><button type="button" id="rptClose">閉じる</button></div>
 </dialog>
 
+<dialog id="reserveDlg">
+  <div class="dlghead"><span>🎫 新規・体験用の確保枠</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:74vh;overflow:auto">
+    <p style="font-size:11px;color:var(--sub);margin:0">体験・新規入塾を受けられるよう、毎週この曜日×コマに席を確保します。既存生徒でこの枠を埋めようとすると警告が出ます（禁止はしません）。設定は毎週共通です。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+      <label style="font-size:12px;color:var(--sub)">曜日<br><select id="rsvDay"></select></label>
+      <label style="font-size:12px;color:var(--sub)">コマ<br><select id="rsvSlot"></select></label>
+      <label style="font-size:12px;color:var(--sub)">確保席数<br><input type="number" id="rsvCount" min="0" max="7" value="1" style="width:64px;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:4px"></label>
+      <button id="rsvAdd" class="primary">設定/更新</button>
+    </div>
+    <div id="rsvList"></div>
+  </div>
+  <div class="dlgfoot"><button type="button" id="rsvClose">閉じる</button></div>
+</dialog>
+
+<dialog id="trialDlg">
+  <div class="dlghead"><span>🎓 体験・新規パイプライン</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:74vh;overflow:auto">
+    <p style="font-size:11px;color:var(--sub);margin:0">問い合わせ→体験→入塾の取りこぼしを防ぎます。連絡は人が行い、ここは進行管理と記録です。</p>
+    <button id="trialAdd" class="primary" style="align-self:flex-start">＋ 新規見込みを追加</button>
+    <div id="trialList"></div>
+  </div>
+  <div class="dlgfoot"><button type="button" id="trialClose">閉じる</button></div>
+</dialog>
+
+<dialog id="demandDlg">
+  <div class="dlghead"><span>📊 需給ヒートマップ（曜日×コマ）</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:74vh;overflow:auto">
+    <p style="font-size:11px;color:var(--sub);margin:0">今日の週の空き・確保枠・希望者数を色分け。新規募集で訴求しやすい帯／先に確保を切る帯の判断に。</p>
+    <div id="demandGrid" style="overflow-x:auto"></div>
+  </div>
+  <div class="dlgfoot"><button type="button" id="dmdClose">閉じる</button></div>
+</dialog>
+
 <!-- 講師の稼働可能時間（曜日×コマ）ダイアログ -->
 <dialog id="availDlg">
   <div class="dlghead"><span id="availTitle">稼働時間</span></div>
@@ -1253,7 +1294,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.37.0';
+const APP_VER='2.39.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1386,6 +1427,8 @@ function load(){
   if(!Array.isArray(S.handovers))S.handovers=[]; // 引き継ぎ未送信の集約（作表→送信で消込）
   if(!Array.isArray(S.inbox))S.inbox=[]; // P5：電話/LINE受付の1行キュー（open→人が消込）
   if(!Array.isArray(S.contacts))S.contacts=[]; // N2：保護者連絡ログ（履歴＋次回確認日リマインド）
+  if(!S.reserve||typeof S.reserve!=='object')S.reserve={}; // A1：新規/体験用の確保枠（'曜日-コマ'→席数・毎週共通）
+  if(!Array.isArray(S.trials))S.trials=[]; // A2：体験→入塾パイプライン（受付→日程→体験→入塾/見送り）
   if(!S.meta||typeof S.meta!=='object')S.meta={}; // A①：データ来歴（datasetId/sourceCheckedAt/importedAt等）
   // 朝2コマ（夏時間割用）をmasterに補完し、master順に整える（既存データの移行）
   SLOT_MASTER.forEach(m=>{if(!S.slots.some(s=>s.id===m.id))S.slots.push({...m})});
@@ -2168,6 +2211,14 @@ function collectWarnings(lesson){
    set.add(lesson.studentId);
    if(set.size>STUDIO_CAP)
      warn.push(`⚠ この時間帯（${DAYS[lesson.day]}曜 ${slotById(lesson.slotId)?slotById(lesson.slotId).label:''}）は${set.size}名になります。教室の席数上限（${STUDIO_CAP}名）を超えます`);}
+  // A1 新規/体験用の確保枠を、既存生徒の配置が食う場合の警告（体験・初回・仮は除外＝確保枠を使ってよい）
+  {const reserved=(typeof reservedAt==='function')?reservedAt(lesson.day,lesson.slotId):0;
+   if(reserved>0&&['体験','初回','仮'].indexOf(lesson.status)===-1){
+     const occ=occupancyAt(lesson.weekId,lesson.day,lesson.slotId,lesson.id);
+     const freeAfter=STUDIO_CAP-(occ+1);
+     if(freeAfter<reserved)
+       warn.push(`🎫 このコマは新規・体験用に${reserved}席確保しています。既存生徒を入れると体験受付の余地が減ります（残り確保 ${Math.max(0,freeAfter)}席）`);
+   }}
   return warn;
 }
 // ── Phase 2 ハードストップ：生徒二重予約・席超過は"越えられない制約"として保存/移動を拒否 ──
@@ -2887,7 +2938,8 @@ function getActionSummary(){
   const unrec=(typeof getUnrecordedAtt==='function')?getUnrecordedAtt():[]; // N1 出席未記録
   const duec=(typeof getDueContacts==='function')?getDueContacts():[]; // N2 連絡フォロー（確認日到来）
   const risks=(typeof getRetentionRisks==='function')?getRetentionRisks():[]; // B1 退塾予兆
-  return {mk,tasks,handovers,cases,inbox,unrec,duec,risks,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length+unrec.length+duec.length+risks.length};
+  const trialsDue=(typeof getDueTrials==='function')?getDueTrials():[]; // A2 体験フォロー期限到来
+  return {mk,tasks,handovers,cases,inbox,unrec,duec,risks,trialsDue,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length+unrec.length+duec.length+risks.length+trialsDue.length};
 }
 // ===== N2 保護者連絡ログ：送信記録＋次回確認日リマインド（送信は人。ここは記録・催促のみ）=====
 function getDueContacts(){ const t=todayISO(); return (S.contacts||[]).filter(c=>c&&!c.done&&c.followup&&c.followup<=t); }
@@ -2947,7 +2999,7 @@ function renderCaseBoard(){
   const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'';};
   const sn=id=>{const s=studentById(id);return s?s.name:'(不明)';};
   const sec=t=>el('div',{text:t,style:'font-weight:700;color:var(--danger);margin:8px 0 4px'});
-  const {mk,tasks,handovers,cases,inbox,unrec,duec,risks}=getActionSummary();
+  const {mk,tasks,handovers,cases,inbox,unrec,duec,risks,trialsDue}=getActionSummary();
   const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'（全体）';};
   const gotoSwap=()=>{const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();};
   // P5 受付メモ（電話/LINEの1行キュー）：新規追加＋未処理一覧
@@ -2959,10 +3011,22 @@ function renderCaseBoard(){
       ic.append(el('div',{style:'font-weight:600',text:'📝 '+x.text+(x.studentName?'（'+x.studentName+'さん）':'')}));
       ic.append(el('div',{style:'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px'},
         el('button',{class:'small',text:'👤 生徒紐付け',onclick:()=>inboxLinkStudent(x.id)}),
+        el('button',{class:'small',text:'🎓 見込みへ',onclick:()=>promoteInboxToTrial(x.id)}),
         el('button',{class:'small',text:'🔁 振替へ',onclick:()=>{const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();}}),
         el('button',{class:'small primary',text:'✅ 完了',onclick:()=>inboxDone(x.id)}),
         el('button',{class:'small danger',text:'🗑',onclick:()=>inboxDelete(x.id)})));
       box.append(ic);
+    });
+  }
+  // A2 体験フォロー（次回確認日が到来した新規見込み）＝取りこぼし防止
+  if(trialsDue&&trialsDue.length){
+    box.append(sec('🎓 体験フォロー（要連絡）：'+trialsDue.length+'件'));
+    trialsDue.forEach(t=>{
+      const tc=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px'});
+      tc.append(el('div',{style:'font-weight:600',text:'🎓 '+(t.name||'（名前未設定）')+'：'+t.stage+'　'+t.followup+'確認'+(t.note?'（'+t.note+'）':'')}));
+      tc.append(el('div',{style:'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px'},
+        el('button',{class:'small',text:'🎓 パイプラインを開く',onclick:()=>{const d=$('caseDlg');if(d)d.close();openTrialDlg();}})));
+      box.append(tc);
     });
   }
   // N2 連絡フォロー（次回確認日が到来した保護者連絡）
@@ -3060,7 +3124,7 @@ function renderCaseBoard(){
       box.append(rc);
     });
   }
-  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length)&&!(unrec&&unrec.length)&&!(duec&&duec.length)&&!(risks&&risks.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
+  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length)&&!(unrec&&unrec.length)&&!(duec&&duec.length)&&!(risks&&risks.length)&&!(trialsDue&&trialsDue.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
   const done=(S.cases||[]).filter(c=>c.status==='done').length;
   if(done)box.append(el('div',{text:'（完了した欠席案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
 }
@@ -3400,9 +3464,21 @@ function renderTodaySummary(){
     if(a.unrec&&a.unrec.length)parts.push('出席未記録'+a.unrec.length);
     if(a.duec&&a.duec.length)parts.push('連絡確認'+a.duec.length);
     if(a.risks&&a.risks.length)parts.push('継続気がかり'+a.risks.length);
+    if(a.trialsDue&&a.trialsDue.length)parts.push('体験フォロー'+a.trialsDue.length);
     wrap.append(el('button',{style:'width:100%;text-align:left;border:1px solid var(--danger);background:transparent;color:var(--danger);border-radius:10px;padding:8px 12px;font-weight:700;display:flex;flex-direction:column;gap:2px;cursor:pointer',onclick:()=>{if(typeof openCaseBoard==='function')openCaseBoard();}},
       el('span',{text:'🗂 要対応 '+a.total+'件（タップで開く）'}),
       el('span',{style:'font-size:12px;font-weight:normal;color:var(--sub)',text:parts.join('・')})));
+  }
+  // A1 新規・体験の確保枠アラート（今日の週で、確保枠が埋まりかけていないか）
+  if(typeof getReserveStatus==='function'){
+    const st=getReserveStatus(reserveWeek());
+    if(st.length){
+      const total=st.reduce((n,x)=>n+x.reserved,0), endanger=st.filter(x=>x.endangered);
+      const bar=el('button',{style:'width:100%;text-align:left;border:1px solid '+(endanger.length?'var(--danger)':'var(--line)')+';background:transparent;color:'+(endanger.length?'var(--danger)':'var(--fg,inherit)')+';border-radius:10px;padding:8px 12px;font-weight:700;display:flex;flex-direction:column;gap:2px;cursor:pointer',onclick:()=>{if(typeof openReserveDlg==='function')openReserveDlg();}},
+        el('span',{text:'🎫 新規・体験の確保枠：'+total+'席'+(endanger.length?'（⚠ '+endanger.length+'コマ埋まりかけ）':'（余裕あり）')}));
+      if(endanger.length)bar.append(el('span',{style:'font-size:12px;font-weight:normal;color:var(--sub)',text:endanger.map(x=>DAYS[x.day]+'曜'+(slotById(x.slotId)?slotById(x.slotId).label:'')+'(空'+x.free+')').join('・')}));
+      wrap.append(bar);
+    }
   }
   // P5 電話/LINE受付を今日画面からすぐ記録
   wrap.append(el('button',{class:'small',style:'align-self:flex-start',text:'＋ 受付メモ（電話/LINE）',onclick:()=>{if(typeof addInboxNote==='function')addInboxNote();}}));
@@ -3593,6 +3669,176 @@ $('rptStudent')&&($('rptStudent').onchange=()=>{fillReportMonths($('rptStudent')
 $('rptMonth')&&($('rptMonth').onchange=renderReport);
 $('rptCopy')&&($('rptCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('rptText').value);toast('コピーしました。ご自身で送信してください');}catch(e){toast('コピーできませんでした。長押しで選択してください');}});
 $('rptClose')&&($('rptClose').onclick=()=>$('reportDlg').close());
+
+/* ---------------- A1 新規・体験用の確保枠（毎週共通の曜日×コマ席数。埋まり前アラート）---------------- */
+function reserveKey(day,slotId){return day+'-'+slotId;}
+function reservedAt(day,slotId){const m=S.reserve||{};return m[reserveKey(day,slotId)]||0;}
+function getReserveStatus(week){ // 指定週での確保枠の充足状況（endangered=空きが確保数を下回る）
+  if(!week)return [];
+  const out=[], slotsHere=weekSlots(week);
+  Object.keys(S.reserve||{}).forEach(k=>{
+    const cnt=S.reserve[k]; if(!cnt)return;
+    const idx=k.indexOf('-'), day=Number(k.slice(0,idx)), slotId=k.slice(idx+1);
+    if(!slotsHere.some(sl=>sl.id===slotId))return;
+    const occ=occupancyAt(week.id,day,slotId), free=Math.max(0,STUDIO_CAP-occ);
+    out.push({day,slotId,reserved:cnt,free,endangered:free<cnt});
+  });
+  out.sort((a,b)=>a.day-b.day||slotOrderIdx(a.slotId)-slotOrderIdx(b.slotId));
+  return out;
+}
+function slotOrderIdx(id){const o=['sl0','sl0b','sl1','sl2','sl3','sl4','sl5'];const i=o.indexOf(id);return i<0?99:i;}
+function reserveWeek(){ // アラートに使う週：今日の週→なければ表示中の週
+  const t=(typeof findTodayWeekDay==='function')?findTodayWeekDay():null;
+  if(t&&t.week)return t.week;
+  return (S.weeks||[]).find(w=>w.id===(S.ui&&S.ui.weekId))||null;
+}
+function renderReserveEditor(){
+  const dSel=$('rsvDay'); if(dSel&&!dSel.options.length){DAYS.forEach((d,i)=>dSel.append(el('option',{value:i,text:d+'曜'})));}
+  const sSel=$('rsvSlot'); if(sSel){const wk=reserveWeek(), slots=wk?weekSlots(wk):[]; const src=slots.length?slots:SLOT_MASTER; sSel.innerHTML=''; src.forEach(sl=>sSel.append(el('option',{value:sl.id,text:sl.label})));}
+  const box=$('rsvList'); if(!box)return; box.innerHTML='';
+  const wk=reserveWeek();
+  const st=getReserveStatus(wk);
+  if(!Object.keys(S.reserve||{}).length){ box.append(el('div',{style:'font-size:13px;color:var(--sub)',text:'まだ確保枠がありません。上で曜日×コマ×席数を設定してください。'})); return; }
+  box.append(el('div',{style:'font-weight:600;margin-top:6px',text:'設定中の確保枠'+(wk?'（'+wk.name+'の空き状況）':'')}));
+  const slbl=id=>{const s=slotById(id);return s?s.label:id;};
+  // 現在週に無いスロットの分も一覧に出す（設定として保持されているもの全部）
+  Object.keys(S.reserve).sort().forEach(k=>{
+    const cnt=S.reserve[k]; if(!cnt)return;
+    const idx=k.indexOf('-'), day=Number(k.slice(0,idx)), slotId=k.slice(idx+1);
+    const s=st.find(x=>x.day===day&&x.slotId===slotId);
+    const row=el('div',{style:'display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;padding:6px;margin-bottom:6px'});
+    row.append(el('span',{style:'font-weight:600',text:DAYS[day]+'曜 '+slbl(slotId)+'：確保'+cnt+'席'}));
+    if(s)row.append(el('span',{style:'font-size:12px;color:'+(s.endangered?'var(--danger)':'var(--sub)'),text:s.endangered?('⚠ 空き'+s.free+'席＝確保枠が埋まりかけ'):('空き'+s.free+'席（確保OK）')}));
+    row.append(el('button',{class:'small danger',style:'margin-left:auto',text:'削除',onclick:()=>delReserve(k)}));
+    box.append(row);
+  });
+}
+function addReserve(){
+  const day=$('rsvDay').value, slotId=$('rsvSlot').value, cnt=Math.max(0,Math.min(7,Number($('rsvCount').value)||0));
+  if(!S.reserve||typeof S.reserve!=='object')S.reserve={};
+  pushUndo('確保枠の設定');
+  if(cnt===0)delete S.reserve[reserveKey(Number(day),slotId)];
+  else S.reserve[reserveKey(Number(day),slotId)]=cnt;
+  save(); renderAll(); renderReserveEditor();
+  toast(cnt===0?'確保枠を外しました':'確保枠を設定しました（'+DAYS[Number(day)]+'曜 '+(slotById(slotId)?slotById(slotId).label:'')+'：'+cnt+'席）');
+}
+function delReserve(k){ pushUndo('確保枠の削除'); delete (S.reserve||{})[k]; save(); renderAll(); renderReserveEditor(); }
+function openReserveDlg(){ renderReserveEditor(); $('reserveDlg').showModal(); }
+$('btnReserve')&&($('btnReserve').onclick=openReserveDlg);
+$('rsvAdd')&&($('rsvAdd').onclick=addReserve);
+$('rsvClose')&&($('rsvClose').onclick=()=>$('reserveDlg').close());
+
+/* ---------------- A2 体験→入塾パイプライン（受付→日程→体験→入塾/見送り。連絡は人）---------------- */
+const TRIAL_STAGES=['受付','日程調整','体験予定','体験済','入塾','見送り'];
+function getOpenTrials(){return (S.trials||[]).filter(t=>t&&t.stage!=='入塾'&&t.stage!=='見送り');}
+function getDueTrials(){ const t=todayISO(); return getOpenTrials().filter(x=>x.followup&&x.followup<=t); }
+function promoteInboxToTrial(inboxId){
+  const x=(S.inbox||[]).find(i=>i.id===inboxId); if(!x)return;
+  if(!Array.isArray(S.trials))S.trials=[];
+  pushUndo('受付→見込みへ昇格');
+  S.trials.push({id:uid(),name:x.studentName||'',grade:'',note:x.text||'',desired:'',stage:'受付',trialDate:'',followup:'',createdAt:new Date().toISOString()});
+  x.status='done'; x.doneAt=new Date().toISOString(); // 受付は消込
+  save(); renderAll(); if(typeof renderCaseBoard==='function')renderCaseBoard();
+  toast('新規見込みに昇格しました（🎓体験パイプラインで管理）');
+}
+function addTrial(){
+  const nm=prompt('新規見込みの名前（分かれば）／メモ　例：山田さん 中2 数学希望'); if(nm==null)return;
+  if(!Array.isArray(S.trials))S.trials=[];
+  pushUndo('新規見込みを追加');
+  S.trials.push({id:uid(),name:nm.trim(),grade:'',note:'',desired:'',stage:'受付',trialDate:'',followup:'',createdAt:new Date().toISOString()});
+  save(); renderAll(); renderTrialList();
+}
+function trialEdit(id,field,label){
+  const t=(S.trials||[]).find(x=>x.id===id); if(!t)return;
+  const v=prompt(label, t[field]||''); if(v==null)return;
+  pushUndo('見込みを編集'); t[field]=v.trim(); save(); renderTrialList();
+}
+function trialSetStage(id,stage){
+  const t=(S.trials||[]).find(x=>x.id===id); if(!t)return;
+  pushUndo('見込みの段階変更'); t.stage=stage;
+  if(stage==='体験済'&&!t.followup){ const d=new Date(); d.setDate(d.getDate()+2); const p=n=>String(n).padStart(2,'0'); t.followup=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); } // 体験後フォローを2日後に自動セット
+  save(); renderAll(); renderTrialList(); if(typeof renderCaseBoard==='function')renderCaseBoard();
+}
+function trialSetDate(id,field,label){
+  const t=(S.trials||[]).find(x=>x.id===id); if(!t)return;
+  const v=prompt(label+'（YYYY-MM-DD、空で解除）', t[field]||''); if(v==null)return;
+  pushUndo('見込みの日付'); t[field]=v.trim(); save(); renderAll(); renderTrialList();
+}
+function trialDelete(id){ if(!confirm('この見込みを削除しますか？'))return; pushUndo('見込みを削除'); S.trials=(S.trials||[]).filter(t=>t.id!==id); save(); renderAll(); renderTrialList(); }
+function renderTrialList(){
+  const box=$('trialList'); if(!box)return; box.innerHTML='';
+  const open=getOpenTrials(), closed=(S.trials||[]).filter(t=>t.stage==='入塾'||t.stage==='見送り');
+  if(!open.length)box.append(el('div',{style:'font-size:13px;color:var(--sub)',text:'進行中の見込みはありません。'}));
+  open.forEach(t=>{
+    const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px'});
+    card.append(el('div',{style:'font-weight:700'},(t.name||'（名前未設定）')+(t.grade?'（'+t.grade+'）':'')));
+    if(t.note)card.append(el('div',{style:'font-size:12px;color:var(--sub)',text:t.note}));
+    const stageRow=el('div',{style:'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px'});
+    const sel=el('select',{onchange:e=>trialSetStage(t.id,e.target.value)});
+    TRIAL_STAGES.forEach(st=>{const o=el('option',{value:st,text:st});if(st===t.stage)o.selected=true;sel.append(o);});
+    stageRow.append(el('span',{style:'font-size:12px;color:var(--sub)',text:'段階'}),sel);
+    if(t.trialDate)stageRow.append(el('span',{style:'font-size:12px',text:'体験:'+t.trialDate}));
+    if(t.followup)stageRow.append(el('span',{style:'font-size:12px;color:var(--danger)',text:'次回:'+t.followup}));
+    card.append(stageRow);
+    card.append(el('div',{style:'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px'},
+      el('button',{class:'small',text:'名前/学年',onclick:()=>trialEdit(t.id,'name','名前（メモ）')}),
+      el('button',{class:'small',text:'希望枠',onclick:()=>trialEdit(t.id,'desired','希望の曜日・時間帯・科目')}),
+      el('button',{class:'small',text:'体験日',onclick:()=>trialSetDate(t.id,'trialDate','体験予定日')}),
+      el('button',{class:'small',text:'次回確認日',onclick:()=>trialSetDate(t.id,'followup','次回フォロー日')}),
+      el('button',{class:'small danger',text:'🗑',onclick:()=>trialDelete(t.id)})));
+    if(t.desired)card.append(el('div',{style:'font-size:12px;color:var(--sub);margin-top:2px',text:'希望：'+t.desired}));
+    box.append(card);
+  });
+  if(closed.length){
+    const nyu=closed.filter(t=>t.stage==='入塾').length, miokuri=closed.filter(t=>t.stage==='見送り').length;
+    box.append(el('div',{style:'font-size:12px;color:var(--sub);margin-top:6px',text:'これまで：入塾'+nyu+'・見送り'+miokuri+'（体験→入塾率 '+(nyu+miokuri?Math.round(nyu/(nyu+miokuri)*100):0)+'%）'}));
+  }
+}
+function openTrialDlg(){ renderTrialList(); $('trialDlg').showModal(); }
+$('btnTrial')&&($('btnTrial').onclick=openTrialDlg);
+$('trialAdd')&&($('trialAdd').onclick=addTrial);
+$('trialClose')&&($('trialClose').onclick=()=>$('trialDlg').close());
+
+/* ---------------- A3 需給ヒートマップ（曜日×コマの占有/確保/希望者数）---------------- */
+function demandAt(week,day,slotId){
+  const occ=occupancyAt(week.id,day,slotId), reserved=reservedAt(day,slotId), free=Math.max(0,STUDIO_CAP-occ);
+  let demand=0; const pk=(typeof prefKey==='function')?prefKey(day,slotId):null;
+  if(pk!=null)(S.students||[]).forEach(s=>{ if(s&&(typeof isActiveStudent!=='function'||isActiveStudent(s))&&Array.isArray(s.prefs)&&s.prefs.includes(pk))demand++; });
+  return {occ,reserved,free,demand};
+}
+function renderDemand(){
+  const box=$('demandGrid'); if(!box)return; box.innerHTML='';
+  const wk=reserveWeek(); if(!wk){box.textContent='対象の週がありません。';return;}
+  const slots=weekSlots(wk), days=[0,1,2,3,4,5];
+  box.append(el('div',{style:'font-weight:600;margin-bottom:4px',text:wk.name+'の状況'}));
+  const tbl=el('table',{class:'mtable',style:'font-size:12px;min-width:420px'});
+  const hr=el('tr',{}); hr.append(el('th',{text:''})); days.forEach(d=>hr.append(el('th',{text:DAYS[d]}))); tbl.append(hr);
+  const attract=[], full=[];
+  slots.forEach(sl=>{
+    const tr=el('tr',{}); tr.append(el('th',{text:sl.label}));
+    days.forEach(d=>{
+      const x=demandAt(wk,d,sl.id);
+      let bg='transparent';
+      if(x.free<=0)bg='rgba(220,50,50,.18)';
+      else if(x.demand>=2)bg='rgba(230,170,0,.22)';
+      else if(x.reserved>0)bg='rgba(60,130,60,.15)';
+      tr.append(el('td',{style:'text-align:center;background:'+bg,text:x.occ+'/'+STUDIO_CAP+(x.reserved?' 🎫'+x.reserved:'')+(x.demand?' ♥'+x.demand:'')}));
+      if(x.free>0&&x.demand>=2)attract.push({d,sl,x});
+      if(x.free<=0)full.push({d,sl});
+    });
+    tbl.append(tr);
+  });
+  box.append(tbl);
+  const sum=el('div',{style:'font-size:12px;color:var(--sub);margin-top:8px;display:flex;flex-direction:column;gap:2px'});
+  attract.sort((a,b)=>b.x.demand-a.x.demand);
+  sum.append(el('div',{text:'🟡 訴求向き（希望者が多く空きあり）：'+(attract.length?attract.slice(0,5).map(a=>DAYS[a.d]+a.sl.label+'(希望'+a.x.demand+'/空'+a.x.free+')').join('、'):'なし')}));
+  sum.append(el('div',{text:'🔴 満席（先に確保枠を切る候補）：'+(full.length?full.length+'コマ':'なし')}));
+  sum.append(el('div',{style:'margin-top:4px',text:'凡例：数字＝在籍/上限、🎫＝新規確保席、♥＝この枠を希望する在籍生徒数'}));
+  box.append(sum);
+}
+function openDemandDlg(){ renderDemand(); $('demandDlg').showModal(); }
+$('btnDemand')&&($('btnDemand').onclick=openDemandDlg);
+$('dmdClose')&&($('dmdClose').onclick=()=>$('demandDlg').close());
 
 /* ---------------- 希望時間帯ダイアログ ---------------- */
 let prefEditingStudentId=null;
