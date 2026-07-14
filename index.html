@@ -175,6 +175,13 @@
   .storagemeter.warn{background:#fef6e7;color:#d97706}
   .storagemeter.danger{background:#fdecec;color:#dc2626;font-weight:600}
   @media(max-width:700px){.storagemeter{display:none}}
+  .freshbadge{font-size:11px;padding:3px 8px;border-radius:12px;white-space:nowrap;cursor:pointer}
+  .freshbadge.fb-fresh{background:#e8f7f1;color:#059669}
+  .freshbadge.fb-aging{background:#fef6e7;color:#d97706}
+  .freshbadge.fb-stale{background:#fdecec;color:#dc2626;font-weight:600}
+  .freshbadge.fb-unknown{background:#f3f4f6;color:#6b7280}
+  .freshbanner{background:#fdecec;color:#b91c1c;font-size:12px;padding:6px 12px;border-bottom:1px solid #f3c6c6}
+  @media(max-width:700px){.freshbadge{font-size:10px;padding:2px 6px}}
   /* 授業の移動（D&D／タップ移動） */
   td.cell.dragging{opacity:.4}
   td.cell.drop-hover{outline:2px dashed var(--accent);outline-offset:-2px}
@@ -487,12 +494,14 @@
     <button id="btnNewWeek">＋ 新しい週</button>
     <button id="btnEditWeek" class="small" title="週の名前・開始日を変更">✎</button>
     <span id="storageMeter" class="storagemeter" title="保存データ量"></span>
+    <span id="freshBadge" class="freshbadge fb-unknown" title="データの基準日時。クリックで最新を確認"></span>
     <button id="btnUndo" class="ghost small" disabled title="元に戻せる操作はありません">↩ 元に戻す</button>
     <button id="btnRedo" class="ghost small" disabled title="やり直せる操作はありません">↪</button>
     <button id="btnHelp" class="ghost small" title="使い方マニュアルを開く">❓ 使い方</button>
     <button id="btnQuickAdd" class="primary">＋ 授業を追加</button>
   </div>
 </header>
+<div id="freshBanner" class="freshbanner" style="display:none"></div>
 
 <nav class="tabs">
   <button data-tab="grid" class="active">📅 時間割</button>
@@ -1156,7 +1165,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.20.0';
+const APP_VER='2.21.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1287,6 +1296,7 @@ function load(){
   if(!Array.isArray(S.holds))S.holds=[];
   if(!Array.isArray(S.cases))S.cases=[]; // Phase 3：案件（欠席→振替→連絡の完了状態）
   if(!Array.isArray(S.handovers))S.handovers=[]; // 引き継ぎ未送信の集約（作表→送信で消込）
+  if(!S.meta||typeof S.meta!=='object')S.meta={}; // A①：データ来歴（datasetId/sourceCheckedAt/importedAt等）
   // 朝2コマ（夏時間割用）をmasterに補完し、master順に整える（既存データの移行）
   SLOT_MASTER.forEach(m=>{if(!S.slots.some(s=>s.id===m.id))S.slots.push({...m})});
   {const _o=id=>{const i=SLOT_MASTER.findIndex(m=>m.id===id);return i<0?99:i};
@@ -1932,6 +1942,7 @@ function startMove(lessonId){
 }
 function cancelMove(){moveMode=null;const b=$('moveBanner');if(b)b.style.display='none';renderGrid();}
 function doMoveTo(slotId,teacherId,lessonId){
+  if(!guardFresh('授業の移動'))return;
   const mid=lessonId||moveMode;
   const l=S.lessons.find(x=>x.id===mid); if(!l){cancelMove();return;}
   const w=curWeek(), day=S.ui.day, t=teacherById(teacherId), sl=slotById(slotId);
@@ -2070,6 +2081,7 @@ function collectHardBlocks(weekId,day,slotId,studentId,excludeId){
 }
 $('lessonForm').addEventListener('submit',ev=>{
   ev.preventDefault();
+  if(!guardFresh('授業の追加・変更')){return;}
   const name=$('fStudent').value.trim();
   if(!name){$('fStudent').focus();return}
   // 編集中の授業の生徒はIDで維持（同名の別人への付け替わり防止）
@@ -2150,6 +2162,7 @@ function renderSearchControls(){
   {const ws=weekSlots(w);fillSelect($('qSlot'),ws.map(s=>({value:s.id,text:s.label})),ws[0].id);}
 }
 function runSearch(){
+  if(!guardFresh('空き講師を探す'))return;
   const w=curWeek(), day=Number($('qDay').value), slotId=$('qSlot').value;
   const subj=$('qSubject').value.trim();
   const free=[],busy=[],ngl=[],held=[];
@@ -4131,6 +4144,10 @@ $('importFile').onchange=e=>{
     if(sev&&!confirm(`重大な違反 ${sev}件 を含んだまま取り込みます。本当によろしいですか？（取込後「二重予約を監査する」で詳細を確認できます）`))return;
     try{localStorage.setItem(LS_KEY+'.recovery',JSON.stringify(S))}catch(e){} // 復元前に現データを退避（押しても消えない）
     S=data;
+    // A①：取込JSONのmeta（datasetId/sourceModifiedAt/sourceCheckedAt/coveredWeeks等）を採用し、取込時刻を刻む
+    S.meta=(data.meta&&typeof data.meta==='object')?{...data.meta}:{};
+    if(!S.meta.sourceCheckedAt&&data.__savedAt)S.meta.sourceCheckedAt=data.__savedAt;
+    S.meta.importedAt=new Date().toISOString();
     // 取り込んだデータは「移行済み」とみなし、2026-07-10の一度きり移行(固定名簿TMPL注入・科目正規化)をload()で再発火させない
     // ＝「消した仮予定が復活」「未知科目が空白化」を防止。新規インストールの初回移行(defaultState経路)は温存される。
     S.settings=S.settings||{};
@@ -4234,8 +4251,45 @@ function updateSummerBtn(){
   document.getElementById('btnHelpClose').addEventListener('click',close);
   document.getElementById('btnHelpOk').addEventListener('click',close);
 })();
+// ── A①：データ鮮度（provenance meta）＝古いデータで誤って空き判定/日程確定するのを防ぐ ──
+let _freshCheckedAt=0; // 作業前チェックイン（この端末セッションで「最新確認」した時刻）
+const FRESH_AGING_H=2, FRESH_STALE_H=6, FRESH_CHECKIN_MS=30*60*1000;
+function fmtWhen(iso){if(!iso)return '—';const d=new Date(iso);if(isNaN(d))return '—';const p=n=>String(n).padStart(2,'0');return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes());}
+function freshInfo(){
+  const m=(S&&S.meta)||{};
+  const base=m.sourceCheckedAt||m.importedAt||m.sourceModifiedAt||null;
+  const t=base?Date.parse(base):NaN;
+  const ageH=isFinite(t)?(Date.now()-t)/3600000:null;
+  const checkedIn=(Date.now()-_freshCheckedAt)<FRESH_CHECKIN_MS;
+  let level='unknown';
+  if(ageH!=null)level=ageH>FRESH_STALE_H?'stale':(ageH>FRESH_AGING_H?'aging':'fresh');
+  return {m,base,ageH,level,checkedIn};
+}
+function renderFreshness(){
+  const el0=$('freshBadge'); if(!el0)return;
+  const f=freshInfo();
+  const lab={fresh:'● 最新',aging:'● やや古い',stale:'● 古い',unknown:'● 基準不明'}[f.level];
+  el0.className='freshbadge fb-'+f.level;
+  el0.textContent=lab+(f.base?('（基準 '+fmtWhen(f.base)+'）'):'');
+  el0.title='データ基準（確認時点）: '+fmtWhen(f.m.sourceCheckedAt||f.m.importedAt)+(f.m.sourceModifiedAt?('\nシート更新: '+fmtWhen(f.m.sourceModifiedAt)):'')+(f.m.datasetId?('\nデータID: '+f.m.datasetId):'')+'\n\nクリック＝「最新を確認」（30分間ゲート解除）';
+  const bn=$('freshBanner');
+  if(bn){
+    if(f.level==='stale'&&!f.checkedIn){
+      bn.style.display='';
+      bn.textContent='⚠ データが古い可能性があります（基準 '+fmtWhen(f.base)+'／'+(f.ageH!=null?Math.round(f.ageH)+'時間前':'不明')+'）。最新シートで再同期するか、右上「● 古い」を押して最新を確認してください。空き検索・追加・移動は続行時に確認が出ます。';
+    } else bn.style.display='none';
+  }
+}
+function checkinFresh(){_freshCheckedAt=Date.now();renderFreshness();toast('この時点を最新として確認しました（30分間、鮮度確認を省略）');}
+// 危険操作の鮮度ゲート：古い時だけ確認を挟む（閲覧は止めない・ハードブロックしない）
+function guardFresh(actionLabel){
+  const f=freshInfo();
+  if(f.level!=='stale'||f.checkedIn)return true;
+  return confirm('⚠ データが'+(f.ageH!=null?Math.round(f.ageH)+'時間':'かなり')+'前のものです（基準 '+fmtWhen(f.base)+'）。\n最新シートに変更があるかもしれません。\n\n「'+actionLabel+'」を続けますか？');
+}
+$('freshBadge')&&($('freshBadge').onclick=checkinFresh);
 function renderAll(){
-  renderWeekBar();renderGrid();renderMasters();renderDatalists();renderSearchControls();renderSwap();
+  renderWeekBar();renderGrid();renderMasters();renderDatalists();renderSearchControls();renderSwap();renderFreshness();
 }
 // 今日ビュー：現在/次コマが時間で変わるので、表示中は1分ごと＋復帰時に再描画
 const todayActive=()=>{const v=document.getElementById('view-today');return v&&v.classList.contains('active');};
