@@ -796,6 +796,17 @@
           <input type="file" id="importFile" accept=".json" style="display:none"></label>
         <p style="font-size:11px;color:var(--sub);margin-top:6px">※取込用JSON（授業や備忘を反映するファイル）は、こちらの「全データを置き換え」で読み込みます。上の「マスタだけ取込」ではありません。</p>
       </div>
+      <div class="card" id="archiveCard">
+        <h3>🗄 年度アーカイブ（容量を空ける）</h3>
+        <p>基準日より前に終わった週を、JSONファイルに書き出してこの端末から取り除き、保存容量を空けます。<b>開いている案件・振替待ちがある週は自動で残します</b>。書き出したファイルは下の「アーカイブを戻す」でいつでも復元できます。</p>
+        <label style="display:block;margin:6px 0">基準日（この日より前に終わる週が対象）：
+          <input type="date" id="archiveCutoff" style="margin-left:6px"></label>
+        <button id="btnArchivePreview" class="primary">対象をプレビュー</button>
+        <div id="archiveResult" style="margin-top:8px"></div>
+        <label style="display:inline-block;margin-top:10px"><button onclick="document.getElementById('archiveFile').click()">🗄 アーカイブを戻す（追記）</button>
+          <input type="file" id="archiveFile" accept=".json" style="display:none"></label>
+        <p style="font-size:11px;color:var(--sub);margin-top:6px">※書き出したファイルは復元用の唯一のバックアップです。必ず保存してください。</p>
+      </div>
       <div class="card">
         <h3>🔍 二重予約・席超過の監査</h3>
         <p style="font-size:12px;color:var(--sub)">取込済みの全データを走査し、同じ枠に同一生徒が二重、または席上限（<span id="auditCap"></span>名）超過がないか点検します（配置時チェックをすり抜けた既存重複を検出）。</p>
@@ -1167,7 +1178,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.24.0';
+const APP_VER='2.25.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -4190,6 +4201,12 @@ $('hoGen')&&($('hoGen').onclick=genHandover);
 $('hoCopy')&&($('hoCopy').onclick=async()=>{const t=$('hoText').value;if(!t)return;if(navigator.share){try{await navigator.share({text:t});return;}catch(e){}}try{await navigator.clipboard.writeText(t);toast('コピーしました。LINEに貼り付けてください');}catch(e){}});
 $('hoSent')&&($('hoSent').onclick=()=>{if(_lastHandoverId)markHandoverSent(_lastHandoverId);else toast('先に「引き継ぎ表を作る」を押してください');});
 {const _ac=$('auditCap'); if(_ac)_ac.textContent=STUDIO_CAP;}
+// B⑤ 年度アーカイブ：ボタン結線＋基準日の既定（今日）
+(function(){
+  const cut=$('archiveCutoff'); if(cut&&!cut.value){ const t=new Date(); cut.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
+})();
+$('btnArchivePreview').onclick=renderArchivePreview;
+$('archiveFile').onchange=e=>{ const f=e.target.files[0]; if(f)importArchiveMerge(f); e.target.value=''; };
 $('btnDelWeek').onclick=()=>{
   const w=curWeek();
   if(S.weeks.length<=1){alert('最後の週は削除できません');return}
@@ -4326,6 +4343,91 @@ function renderPastWeekBadge(){
   const w=(typeof curWeek==='function')?curWeek():null;
   if(isPastWeek(w)){el0.style.display='';el0.textContent='🔒 過去週';}
   else el0.style.display='none';
+}
+// ===== B⑤ 年度アーカイブ（localStorage肥大の根本対策）=====
+// 基準日より前に終わる過去週を、JSONへ書き出してから localStorage から取り除く。
+// 開いている案件（振替待ち等）を含む週は残す。handover は生徒単位＝週非依存なので触らない。
+function weekEndDate(w){ const e=new Date((w&&w.startDate||'')+'T00:00:00'); e.setDate(e.getDate()+6); return e; }
+function openCaseLessonIds(){ // 開いている案件が指す授業ID（＝この授業を含む週は残す）
+  return new Set((S.cases||[]).filter(c=>c&&c.status!=='closed'&&c.lessonId).map(c=>c.lessonId));
+}
+function archiveScan(cutoffStr){
+  const cut=new Date((cutoffStr||'')+'T00:00:00');
+  const openLids=openCaseLessonIds();
+  const lessonsByWeek={};
+  (S.lessons||[]).forEach(l=>{ if(!l)return; (lessonsByWeek[l.weekId]=lessonsByWeek[l.weekId]||[]).push(l); });
+  const archivable=[], blocked=[];
+  (S.weeks||[]).forEach(w=>{
+    if(!w||!w.startDate)return;
+    if(!(weekEndDate(w)<cut))return; // 基準日以降に終わる週は対象外
+    const ls=lessonsByWeek[w.id]||[];
+    if(ls.some(l=>openLids.has(l.id))) blocked.push(w); // 開いた案件を含む→残す
+    else archivable.push(w);
+  });
+  const weekIds=new Set(archivable.map(w=>w.id));
+  const lessons=(S.lessons||[]).filter(l=>l&&weekIds.has(l.weekId));
+  const lessonIds=new Set(lessons.map(l=>l.id));
+  const cases=(S.cases||[]).filter(c=>c&&lessonIds.has(c.lessonId)); // 構造上すべてclosed（openは週ごと残す）
+  return {cutoff:cutoffStr, weeks:archivable, blocked, lessons, lessonIds, cases, weekIds};
+}
+function renderArchivePreview(){
+  const box=$('archiveResult'); if(!box)return; box.innerHTML='';
+  const cutoff=$('archiveCutoff').value;
+  if(!cutoff){ box.textContent='基準日を選んでください。'; return; }
+  const sc=archiveScan(cutoff);
+  if(!sc.weeks.length){
+    box.innerHTML='<p style="color:var(--sub)">対象になる週はありません'+(sc.blocked.length?('（案件・振替待ちのため残す週：'+sc.blocked.length+'）'):'')+'。</p>';
+    return;
+  }
+  const bytesNow=new Blob([JSON.stringify(S)]).size;
+  const arcBytes=new Blob([JSON.stringify({weeks:sc.weeks,lessons:sc.lessons,cases:sc.cases})]).size;
+  const wrap=el('div',{});
+  wrap.innerHTML='<p><b>'+sc.weeks.length+'週・'+sc.lessons.length+'授業</b>'+(sc.cases.length?('・'+sc.cases.length+'案件（完了済）'):'')
+    +'を書き出して取り除きます。<br>現在'+(bytesNow/1024/1024).toFixed(2)+'MB → 約 '+(arcBytes/1024).toFixed(0)+'KB を軽くします。</p>'
+    +(sc.blocked.length?('<p style="font-size:12px;color:#b26a00">案件・振替待ちのため残す週：'+sc.blocked.map(w=>w.name||w.startDate).join('、')+'</p>'):'')
+    +'<p style="font-size:12px;color:var(--sub)">対象週：'+sc.weeks.map(w=>w.name||w.startDate).slice(0,24).join('、')+(sc.weeks.length>24?' …':'')+'</p>';
+  wrap.append(el('button',{class:'danger',text:'書き出して取り除く（実行）',onclick:()=>runArchive(cutoff)}));
+  box.append(wrap);
+}
+function runArchive(cutoff){
+  const sc=archiveScan(cutoff);
+  if(!sc.weeks.length){ toast('対象がありません'); return; }
+  if(!confirm('🗄 '+sc.weeks.length+'週・'+sc.lessons.length+'授業をJSONに書き出し、この端末から取り除きます。\n\nダウンロードされるファイルは復元用の唯一のバックアップです。必ず保存してください。\n実行しますか？'))return;
+  // 1) 書き出し（＝外部バックアップ）
+  const stamp=new Date();const pp=n=>String(n).padStart(2,'0');
+  const iso=stamp.getFullYear()+'-'+pp(stamp.getMonth()+1)+'-'+pp(stamp.getDate());
+  const payload={__archive:true,__appVer:APP_VER,archivedAt:new Date().toISOString(),cutoff,
+    weeks:sc.weeks, lessons:sc.lessons, cases:sc.cases};
+  const blob=new Blob([JSON.stringify(payload,null,1)],{type:'application/json'});
+  const fn='授業スケジューラ_年度アーカイブ_'+iso+'.json';
+  const a=el('a',{href:URL.createObjectURL(blob),download:fn}); a.click(); URL.revokeObjectURL(a.href);
+  // 2) 現データから取り除く
+  S.weeks=(S.weeks||[]).filter(w=>!sc.weekIds.has(w.id));
+  S.lessons=(S.lessons||[]).filter(l=>!(l&&sc.lessonIds.has(l.id)));
+  S.cases=(S.cases||[]).filter(c=>!(c&&sc.lessonIds.has(c.lessonId)));
+  // 表示中の週が消えたら先頭へ寄せる
+  if(S.ui&&!(S.weeks||[]).some(w=>w.id===S.ui.weekId)) S.ui.weekId=(S.weeks&&S.weeks.length)?S.weeks[0].id:null;
+  save(); renderAll();
+  toast('アーカイブ完了：'+fn+' を保存しました。'+sc.weeks.length+'週を取り除きました');
+}
+function importArchiveMerge(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    let d; try{ d=JSON.parse(r.result); }catch(e){ alert('JSONを読めませんでした'); return; }
+    if(!d||!Array.isArray(d.weeks)){ alert('アーカイブファイルではないようです（weeks が見つかりません）'); return; }
+    const haveW=new Set((S.weeks||[]).map(w=>w.id));
+    const haveL=new Set((S.lessons||[]).map(l=>l.id));
+    if(!Array.isArray(S.cases))S.cases=[];
+    const haveC=new Set(S.cases.map(c=>c.id));
+    let addW=0,addL=0,addC=0;
+    (d.weeks||[]).forEach(w=>{ if(w&&w.id&&!haveW.has(w.id)){ S.weeks.push(w); addW++; } });
+    (d.lessons||[]).forEach(l=>{ if(l&&l.id&&!haveL.has(l.id)){ S.lessons.push(l); addL++; } });
+    (d.cases||[]).forEach(c=>{ if(c&&c.id&&!haveC.has(c.id)){ S.cases.push(c); addC++; } });
+    (S.weeks||[]).sort((a,b)=>String(a.startDate).localeCompare(String(b.startDate)));
+    save(); renderAll();
+    toast('アーカイブを戻しました：'+addW+'週・'+addL+'授業'+(addC?('・'+addC+'案件'):'')+'を追記');
+  };
+  r.readAsText(file);
 }
 function renderAll(){
   renderWeekBar();renderGrid();renderMasters();renderDatalists();renderSearchControls();renderSwap();renderFreshness();renderPastWeekBadge();
