@@ -919,6 +919,15 @@
         </select></label>
         <label>メモ<input type="text" id="fMemo" placeholder="例：英検前倒し"></label>
       </div>
+      <details style="border:1px solid var(--line);border-radius:8px;padding:6px 8px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600">📘 授業メモ（進度・宿題・理解度・次回）＝引き継ぎ表に自動反映</summary>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+          <label style="font-size:12px">進度<input type="text" id="fProgress" placeholder="例：二次関数の平方完成まで"></label>
+          <label style="font-size:12px">宿題<input type="text" id="fHomework" placeholder="例：新演習p.40-42"></label>
+          <label style="font-size:12px">理解度<input type="text" id="fUnderstanding" placeholder="例：因数分解は定着、符号ミスが残る"></label>
+          <label style="font-size:12px">次回<input type="text" id="fNext" placeholder="例：一次関数の利用へ"></label>
+        </div>
+      </details>
     </div>
     <div class="dlgfoot">
       <button type="button" id="btnDelLesson" class="danger" style="margin-right:auto">削除</button>
@@ -1031,7 +1040,7 @@
 
 <!-- 同期の競合ダイアログ（同期版のみ使用。ローカル版では開かれない） -->
 <dialog id="caseDlg">
-  <div class="dlghead"><span>🗂 要対応（振替期限・二重予約NG・欠席連絡を集約）</span></div>
+  <div class="dlghead"><span>🗂 要対応（振替期限・二重予約NG・引き継ぎ・欠席連絡を集約）</span></div>
   <div class="dlgbody" style="gap:8px;max-height:70vh;overflow:auto"><div id="caseBox"></div></div>
   <div style="text-align:right;padding:8px"><button onclick="document.getElementById('caseDlg').close()">閉じる</button></div>
 </dialog>
@@ -1052,10 +1061,11 @@
     </div>
     <button id="hoGen" class="primary">引き継ぎ表を作る</button>
     <textarea id="hoText" style="width:100%;min-height:220px;font-size:12px" placeholder="「引き継ぎ表を作る」を押すと生成されます"></textarea>
-    <p style="font-size:11px;color:var(--sub)">※「直近の学習内容」欄はGmailの授業報告からClaudeが記入できます（宮川に依頼）。連絡先は含みません。送信は人が行ってください。</p>
+    <p style="font-size:11px;color:var(--sub)">※「直近の学習内容」欄は各授業の📘授業メモ（進度・宿題・理解度・次回）から自動で入ります。未記入分はGmailの授業報告からClaudeが補記できます（宮川に依頼）。連絡先は含みません。送信は人が行ってください。</p>
   </div>
   <div style="display:flex;gap:8px;justify-content:flex-end;padding:8px">
     <button id="hoCopy" class="primary">📋 コピー（LINE用）</button>
+    <button id="hoSent" class="small">✅ 送信済みにする</button>
     <button onclick="document.getElementById('handoverDlg').close()">閉じる</button>
   </div>
 </dialog>
@@ -1146,7 +1156,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.18.0';
+const APP_VER='2.20.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -1276,6 +1286,7 @@ function load(){
   if(!Array.isArray(S.slots)||!S.slots.length)S.slots=[];
   if(!Array.isArray(S.holds))S.holds=[];
   if(!Array.isArray(S.cases))S.cases=[]; // Phase 3：案件（欠席→振替→連絡の完了状態）
+  if(!Array.isArray(S.handovers))S.handovers=[]; // 引き継ぎ未送信の集約（作表→送信で消込）
   // 朝2コマ（夏時間割用）をmasterに補完し、master順に整える（既存データの移行）
   SLOT_MASTER.forEach(m=>{if(!S.slots.some(s=>s.id===m.id))S.slots.push({...m})});
   {const _o=id=>{const i=SLOT_MASTER.findIndex(m=>m.id===id);return i<0?99:i};
@@ -1502,7 +1513,7 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show')
 
 /* ---------------- 変更履歴（Undo）：スナップショット方式・メモリ内のみ（localStorage/GAS同期に干渉しない） ---------------- */
 let undoStack=[], redoStack=[];
-const UNDO_COLS=['lessons','holds','students','teachers','ngOverrides','slotOverrides','subjects','weeks','cases'];
+const UNDO_COLS=['lessons','holds','students','teachers','ngOverrides','slotOverrides','subjects','weeks','cases','handovers'];
 function snapshotState(){const o={};UNDO_COLS.forEach(k=>o[k]=JSON.parse(JSON.stringify(S[k]||[])));return o;}
 // 変更前に呼ぶ：現在の状態（授業・仮押さえ・生徒/講師マスタ・NG設定）を退避。新規変更はRedoを無効化
 function pushUndo(label){undoStack.push({label:label||'変更',state:snapshotState()});if(undoStack.length>20)undoStack.shift();redoStack=[];updateUndoBtn();}
@@ -1746,7 +1757,7 @@ function renderGrid(){
   const nb=$('noticeBar');nb.innerHTML='';
   (S.settings.notices||[]).forEach(n=>nb.append(el('div',{text:'📌 備忘：'+n})));
   {const _t=getOpenTasks().length;nb.append(el('div',{class:'notice-task',style:'cursor:pointer;padding:2px 0;'+(_t?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openTaskInbox,text:'🗂 未処理案件：'+_t+'件（クリックで仕分け）'}));}
-  {const _oc=(typeof getActionSummary==='function'?getActionSummary().total:0);nb.append(el('div',{class:'notice-case',style:'cursor:pointer;padding:2px 0;'+(_oc?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openCaseBoard,text:'🗂 要対応：'+_oc+'件（振替期限・二重予約・欠席連絡）'}));}
+  {const _oc=(typeof getActionSummary==='function'?getActionSummary().total:0);nb.append(el('div',{class:'notice-case',style:'cursor:pointer;padding:2px 0;'+(_oc?'color:var(--danger);font-weight:600':'color:var(--sub)'),onclick:openCaseBoard,text:'🗂 要対応：'+_oc+'件（振替期限・二重予約・引き継ぎ・欠席連絡）'}));}
   const alert=$('gridDdlLine');alert.innerHTML='';
   let over=0,soon=0;
   S.lessons.filter(isActiveMakeup).forEach(l=>{
@@ -1811,6 +1822,7 @@ function renderGrid(){
             les.status!=='通常'?el('span',{class:'badge',text:les.status}):null),
           el('div',{class:'sub',text:[les.subject,stu&&stu.grade].filter(Boolean).join('・')}));
         if(les.memo) div.append(el('div',{class:'memo',text:'📝'+les.memo}));
+        if(les.smemo&&(les.smemo.progress||les.smemo.homework||les.smemo.understanding||les.smemo.next)) div.append(el('div',{class:'memo',title:'授業メモあり（進度/宿題/理解度/次回）→引き継ぎ表に反映',text:'📘授業メモ'}));
         td.append(div);
         td.onclick=()=>openLessonDlg({lesson:les});
       }else{
@@ -1978,6 +1990,7 @@ function openLessonDlg(opt){
   $('fSubject').value=opt.lesson?opt.lesson.subject:(opt.subject||'');
   $('fStatus').value=opt.lesson?opt.lesson.status:(opt.status||'通常');
   $('fMemo').value=opt.lesson?opt.lesson.memo:(opt.memo||'');
+  {const sm=(opt.lesson&&opt.lesson.smemo)||{};$('fProgress').value=sm.progress||'';$('fHomework').value=sm.homework||'';$('fUnderstanding').value=sm.understanding||'';$('fNext').value=sm.next||'';}
   $('btnDelLesson').style.display=editingLessonId?'':'none';
   $('btnMoveLesson').style.display=editingLessonId?'':'none';
   updateStudentInfo();
@@ -2082,6 +2095,8 @@ $('lessonForm').addEventListener('submit',ev=>{
     teacherId:$('fTeacher').value, studentId:stu.id,
     subject, status:$('fStatus').value, memo:$('fMemo').value.trim()
   };
+  {const sm={progress:$('fProgress').value.trim(),homework:$('fHomework').value.trim(),understanding:$('fUnderstanding').value.trim(),next:$('fNext').value.trim()};
+   if(sm.progress||sm.homework||sm.understanding||sm.next)lesson.smemo=sm;}
   const hard=collectHardBlocks(lesson.weekId,lesson.day,lesson.slotId,lesson.studentId,lesson.id);
   if(hard.length){alert('⛔ この内容は保存できません：\n\n'+hard.join('\n')+'\n\n（生徒の二重予約・席上限は越えられません。別の講師/時間帯にしてください）');return;}
   const warns=collectWarnings(lesson);
@@ -2654,8 +2669,20 @@ function buildHandoverSheet(studentId,newTeacherId,mode,curTeacherId){
   if(nt&&Array.isArray(nt.ngDays)&&nt.ngDays.length)L.push('■新担当のNG曜日：'+nt.ngDays.map(d=>WD[d]).join('・'));
   if(s.note)L.push('■メモ：'+s.note);
   L.push('');
-  L.push('■直近の学習内容（授業報告より）：');
-  L.push(' （進捗・宿題・弱点・次回予定をここに記入）');
+  L.push('■直近の学習内容（授業メモより）：');
+  const withMemo=recent.filter(x=>x.l.smemo&&(x.l.smemo.progress||x.l.smemo.homework||x.l.smemo.understanding||x.l.smemo.next));
+  if(!withMemo.length){
+    L.push(' （進捗・宿題・理解度・次回は未記入。各授業の📘授業メモに入力すると自動で入ります）');
+  }else{
+    withMemo.slice(0,3).forEach(x=>{
+      const d=x.d,m=x.l.smemo;
+      L.push(' ●'+(d.getMonth()+1)+'/'+d.getDate()+'('+WD[(d.getDay()+6)%7]+')'+(x.l.subject?' '+x.l.subject:''));
+      if(m.progress)L.push('  進度：'+m.progress);
+      if(m.homework)L.push('  宿題：'+m.homework);
+      if(m.understanding)L.push('  理解度：'+m.understanding);
+      if(m.next)L.push('  次回：'+m.next);
+    });
+  }
   L.push('');
   const now=new Date();
   L.push('引き継ぎ日：'+now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate());
@@ -2691,6 +2718,31 @@ function genHandover(){
   const sid=$('hoStudent').value, tid=$('hoTeacher').value, cur=$('hoCurTeacher').value||null;
   const mode=(document.querySelector('input[name="hoMode"]:checked')||{}).value||'kotai';
   $('hoText').value=buildHandoverSheet(sid,tid,mode,cur);
+  _lastHandoverId=recordHandover(sid,tid,mode,cur); // 未送信の引き継ぎとして記録（要対応ボードに集約）
+}
+// ── 引き継ぎ未送信の集約：作表＝未送信で記録→送信後に消込（対外送信は人）──
+let _lastHandoverId=null;
+function recordHandover(sid,tid,mode,cur){
+  if(!Array.isArray(S.handovers))S.handovers=[];
+  const stu=studentById(sid), same=h=>!h.sent&&h.studentId===sid&&h.toTeacherId===tid&&(h.fromTeacherId||null)===(cur||null)&&h.mode===mode;
+  let h=S.handovers.find(same);
+  if(!h){h={id:uid(),studentId:sid,studentName:stu?stu.name:'',fromTeacherId:cur||null,toTeacherId:tid,mode,createdAt:new Date().toISOString(),sent:false};S.handovers.push(h);save();}
+  return h.id;
+}
+function getOpenHandovers(){return (S.handovers||[]).filter(h=>!h.sent);}
+function markHandoverSent(id){
+  const h=(S.handovers||[]).find(x=>x.id===id);if(!h)return;
+  pushUndo('引き継ぎを送信済みに');h.sent=true;h.sentAt=new Date().toISOString();
+  save();renderAll();if(typeof renderCaseBoard==='function')renderCaseBoard();toast('引き継ぎを送信済みにしました');
+}
+function openHandoverFor(h){
+  const d=$('caseDlg');if(d)d.close();
+  openHandover();
+  $('hoStudent').value=h.studentId;fillHoCurTeacher();
+  if(h.fromTeacherId)$('hoCurTeacher').value=h.fromTeacherId;
+  $('hoTeacher').value=h.toTeacherId;
+  const r=document.querySelector('input[name="hoMode"][value="'+h.mode+'"]');if(r)r.checked=true;
+  genHandover();
 }
 // ── Phase 3：案件(case)モデル＝欠席→振替→連絡の"完了状態"を追う（既存の要振替フローと併存、連絡の消込を担う）──
 function ensureAbsenceCase(lesson){
@@ -2708,8 +2760,9 @@ function getOpenCases(){return (S.cases||[]).filter(c=>c.status!=='done');}
 function getActionSummary(){
   const mk=(S.lessons||[]).filter(isActiveMakeup).map(l=>{const dl=deadlineOf(l);return {l,dl,left:dl?daysLeft(dl):null};}).filter(x=>x.left!=null&&x.left<=3).sort((a,b)=>a.left-b.left);
   const tasks=(typeof getOpenTasks==='function')?getOpenTasks():[];
+  const handovers=(typeof getOpenHandovers==='function')?getOpenHandovers():[];
   const cases=getOpenCases();
-  return {mk,tasks,cases,total:mk.length+tasks.length+cases.length};
+  return {mk,tasks,handovers,cases,total:mk.length+tasks.length+handovers.length+cases.length};
 }
 function toggleCaseReq(caseId,key){
   const c=(S.cases||[]).find(x=>x.id===caseId);if(!c)return;
@@ -2723,7 +2776,8 @@ function renderCaseBoard(){
   const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'';};
   const sn=id=>{const s=studentById(id);return s?s.name:'(不明)';};
   const sec=t=>el('div',{text:t,style:'font-weight:700;color:var(--danger);margin:8px 0 4px'});
-  const {mk,tasks,cases}=getActionSummary();
+  const {mk,tasks,handovers,cases}=getActionSummary();
+  const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'（全体）';};
   const gotoSwap=()=>{const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();};
   // A. 振替期限（超過／3日以内）＝放置すると振替権利が失効する案件
   if(mk.length){
@@ -2747,6 +2801,18 @@ function renderCaseBoard(){
     card.append(el('button',{class:'small',text:'仕分けを開く',style:'margin-top:6px',onclick:()=>{const d=$('caseDlg');if(d)d.close();if(typeof openTaskInbox==='function')openTaskInbox();}}));
     box.append(card);
   }
+  // B2. 引き継ぎ未送信（作表したが送信していない交代/代行）
+  if(handovers.length){
+    box.append(sec('📋 引き継ぎ未送信：'+handovers.length+'件'));
+    handovers.forEach(h=>{
+      const card=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px'});
+      card.append(el('div',{style:'font-weight:600',text:'📋 '+(h.studentName||sn(h.studentId))+'さん：'+(h.fromTeacherId?tn(h.fromTeacherId):'（現担当未指定）')+'→'+tn(h.toTeacherId)+'（'+(h.mode==='daiko'?'代行':'交代')+'）'}));
+      card.append(el('div',{style:'display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:8px'},
+        el('button',{class:'small',text:'表を開く',onclick:()=>openHandoverFor(h)}),
+        el('button',{class:'small primary',text:'✅ 送信済みにする',onclick:()=>markHandoverSent(h.id)})));
+      box.append(card);
+    });
+  }
   // C. 欠席案件（既存：欠席→振替→連絡の消込）
   if(cases.length){
     box.append(sec('🗂 欠席→振替→連絡：'+cases.length+'件'));
@@ -2762,7 +2828,7 @@ function renderCaseBoard(){
       box.append(card);
     });
   }
-  if(!mk.length&&!tasks.length&&!cases.length)box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
+  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length)box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
   const done=(S.cases||[]).filter(c=>c.status==='done').length;
   if(done)box.append(el('div',{text:'（完了した欠席案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
 }
@@ -3795,7 +3861,7 @@ function copyLessons(fromId,toId){
   S.lessons.filter(l=>l.weekId===fromId).forEach(l=>{
     if(!toAllowed.has(l.slotId)){skipped++;return;} // 先週に無いコマ（夏の朝コマ等）は複製しない＝孤立授業を作らない
     if(lessonAt(toId,l.day,l.slotId,l.teacherId))return;
-    S.lessons.push({...l,id:uid(),weekId:toId,status:'通常',memo:''});n++;
+    S.lessons.push({...l,id:uid(),weekId:toId,status:'通常',memo:'',smemo:undefined});n++; // 構造化メモは当該授業固有＝コピー先へ持ち越さない
   });
   S.ngOverrides.filter(o=>o.weekId===fromId).forEach(o=>{
     if(!S.ngOverrides.some(x=>x.weekId===toId&&x.day===o.day&&x.teacherId===o.teacherId))
@@ -4083,6 +4149,7 @@ $('btnSPOF')&&($('btnSPOF').onclick=openSPOF);
 $('btnHandover')&&($('btnHandover').onclick=openHandover);
 $('hoGen')&&($('hoGen').onclick=genHandover);
 $('hoCopy')&&($('hoCopy').onclick=async()=>{const t=$('hoText').value;if(!t)return;if(navigator.share){try{await navigator.share({text:t});return;}catch(e){}}try{await navigator.clipboard.writeText(t);toast('コピーしました。LINEに貼り付けてください');}catch(e){}});
+$('hoSent')&&($('hoSent').onclick=()=>{if(_lastHandoverId)markHandoverSent(_lastHandoverId);else toast('先に「引き継ぎ表を作る」を押してください');});
 {const _ac=$('auditCap'); if(_ac)_ac.textContent=STUDIO_CAP;}
 $('btnDelWeek').onclick=()=>{
   const w=curWeek();
