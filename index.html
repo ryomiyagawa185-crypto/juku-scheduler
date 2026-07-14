@@ -752,7 +752,9 @@
       <div class="mbox">
         <h3>生徒（<span id="sCount"></span>名）
           <button id="btnRegStudent" class="primary small" style="margin-left:10px">＋ 新しい生徒を登録</button>
-          <button id="btnHandover" class="small" style="margin-left:6px">📋 引き継ぎ表を作る</button></h3>
+          <button id="btnHandover" class="small" style="margin-left:6px">📋 引き継ぎ表を作る</button>
+          <button id="btnMeeting" class="small" style="margin-left:6px">📋 面談準備</button>
+          <button id="btnReport" class="small" style="margin-left:6px">📄 学習レポート</button></h3>
         <div class="dupbox" id="dupBox"></div>
         <table class="mtable" id="studentTable"></table>
         <h3 style="margin-top:18px">科目リスト（入力補完に使われます）</h3>
@@ -1182,6 +1184,38 @@
   <div class="dlgfoot"><button type="button" id="smemoSave" class="primary">保存</button><button type="button" id="smemoClose">閉じる</button></div>
 </dialog>
 
+<dialog id="meetingDlg">
+  <div class="dlghead"><span>📋 面談準備パック</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:74vh;overflow:auto">
+    <label style="font-size:13px">生徒<select id="mtgStudent" style="margin-left:6px"></select></label>
+    <div id="mtgPack" style="background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px"></div>
+    <label style="font-size:12px;color:var(--sub)">アジェンダ草案（事実→懸念→提案。編集して面談で使う）
+      <textarea id="mtgAgenda" style="width:100%;min-height:190px;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:2px"></textarea></label>
+    <button id="mtgCopy" class="primary">📋 アジェンダをコピー</button>
+    <div style="border-top:1px solid var(--line);margin-top:4px;padding-top:6px">
+      <label style="font-size:12px;color:var(--sub)">面談後メモ・決定事項
+        <textarea id="mtgNote" style="width:100%;min-height:60px;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:2px"></textarea></label>
+      <label style="font-size:12px;color:var(--sub);display:block;margin-top:6px">次回確認日<input type="date" id="mtgFollowup" style="margin-left:6px;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:4px"></label>
+      <button id="mtgRecord" style="margin-top:6px">✅ 面談を記録（連絡ログへ）</button>
+    </div>
+  </div>
+  <div class="dlgfoot"><button type="button" id="mtgClose">閉じる</button></div>
+</dialog>
+
+<dialog id="reportDlg">
+  <div class="dlghead"><span>📄 保護者向け 学習レポート草案</span></div>
+  <div class="dlgbody" style="gap:8px;max-height:74vh;overflow:auto">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px">
+      <label>生徒<select id="rptStudent" style="margin-left:4px"></select></label>
+      <label>月<select id="rptMonth" style="margin-left:4px"></select></label>
+    </div>
+    <p style="font-size:11px;color:var(--sub);margin:0">授業メモ（進度/宿題/理解度/次回）から自動でまとめます。<b>送信は必ずご自身で</b>。内部メモ・連絡先は入りません。</p>
+    <textarea id="rptText" style="width:100%;min-height:260px;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
+    <button id="rptCopy" class="primary">📋 コピー</button>
+  </div>
+  <div class="dlgfoot"><button type="button" id="rptClose">閉じる</button></div>
+</dialog>
+
 <!-- 講師の稼働可能時間（曜日×コマ）ダイアログ -->
 <dialog id="availDlg">
   <div class="dlghead"><span id="availTitle">稼働時間</span></div>
@@ -1219,7 +1253,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.34.0';
+const APP_VER='2.37.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -2852,7 +2886,8 @@ function getActionSummary(){
   const inbox=(typeof getOpenInbox==='function')?getOpenInbox():[]; // P5 受付メモ
   const unrec=(typeof getUnrecordedAtt==='function')?getUnrecordedAtt():[]; // N1 出席未記録
   const duec=(typeof getDueContacts==='function')?getDueContacts():[]; // N2 連絡フォロー（確認日到来）
-  return {mk,tasks,handovers,cases,inbox,unrec,duec,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length+unrec.length+duec.length};
+  const risks=(typeof getRetentionRisks==='function')?getRetentionRisks():[]; // B1 退塾予兆
+  return {mk,tasks,handovers,cases,inbox,unrec,duec,risks,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length+unrec.length+duec.length+risks.length};
 }
 // ===== N2 保護者連絡ログ：送信記録＋次回確認日リマインド（送信は人。ここは記録・催促のみ）=====
 function getDueContacts(){ const t=todayISO(); return (S.contacts||[]).filter(c=>c&&!c.done&&c.followup&&c.followup<=t); }
@@ -2912,7 +2947,7 @@ function renderCaseBoard(){
   const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'';};
   const sn=id=>{const s=studentById(id);return s?s.name:'(不明)';};
   const sec=t=>el('div',{text:t,style:'font-weight:700;color:var(--danger);margin:8px 0 4px'});
-  const {mk,tasks,handovers,cases,inbox,unrec,duec}=getActionSummary();
+  const {mk,tasks,handovers,cases,inbox,unrec,duec,risks}=getActionSummary();
   const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'（全体）';};
   const gotoSwap=()=>{const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();};
   // P5 受付メモ（電話/LINEの1行キュー）：新規追加＋未処理一覧
@@ -3012,7 +3047,20 @@ function renderCaseBoard(){
       box.append(card);
     });
   }
-  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length)&&!(unrec&&unrec.length)&&!(duec&&duec.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
+  // B1 継続の気がかり（退塾予兆）＝日々の緊急ではないが、早めに気づく用。最後に表示。
+  if(risks&&risks.length){
+    box.append(sec('🔻 継続の気がかり：'+risks.length+'件'));
+    risks.forEach(r=>{
+      const rc=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px'});
+      rc.append(el('div',{style:'font-weight:600',text:'🔻 '+(r.student.name||'?')+(r.student.grade?'（'+r.student.grade+'）':'')}));
+      rc.append(el('div',{style:'font-size:12px;color:var(--sub)',text:r.reasons.join('／')}));
+      rc.append(el('div',{style:'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px'},
+        el('button',{class:'small',text:'📋 面談準備',onclick:()=>{const d=$('caseDlg');if(d)d.close();openMeetingDlg(r.student.id);}}),
+        el('button',{class:'small',text:'💤 様子見(2週間)',onclick:()=>retentionSnooze(r.student.id)})));
+      box.append(rc);
+    });
+  }
+  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length)&&!(unrec&&unrec.length)&&!(duec&&duec.length)&&!(risks&&risks.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
   const done=(S.cases||[]).filter(c=>c.status==='done').length;
   if(done)box.append(el('div',{text:'（完了した欠席案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
 }
@@ -3351,6 +3399,7 @@ function renderTodaySummary(){
     if(a.inbox&&a.inbox.length)parts.push('受付'+a.inbox.length);
     if(a.unrec&&a.unrec.length)parts.push('出席未記録'+a.unrec.length);
     if(a.duec&&a.duec.length)parts.push('連絡確認'+a.duec.length);
+    if(a.risks&&a.risks.length)parts.push('継続気がかり'+a.risks.length);
     wrap.append(el('button',{style:'width:100%;text-align:left;border:1px solid var(--danger);background:transparent;color:var(--danger);border-radius:10px;padding:8px 12px;font-weight:700;display:flex;flex-direction:column;gap:2px;cursor:pointer',onclick:()=>{if(typeof openCaseBoard==='function')openCaseBoard();}},
       el('span',{text:'🗂 要対応 '+a.total+'件（タップで開く）'}),
       el('span',{style:'font-size:12px;font-weight:normal;color:var(--sub)',text:parts.join('・')})));
@@ -3393,6 +3442,157 @@ $('smemoSave')&&($('smemoSave').onclick=()=>{
   save(); renderToday(); try{renderGrid()}catch(e){} $('smemoDlg').close(); toast('授業メモを保存しました（引き継ぎ表に反映されます）');
 });
 $('smemoClose')&&($('smemoClose').onclick=()=>$('smemoDlg').close());
+
+/* ---------------- B1 退塾予兆リスト（ルールベース：出席低下・連絡途絶・理解度停滞。断定せず根拠付きで人へ）---------------- */
+const RISK_ACTIVE_DAYS=56, RISK_CONTACT_DAYS=45, RISK_SNOOZE_DAYS=14;
+const _UND_NEG=/不安|苦手|低|×|✕|△|わから|理解不足|停滞|遅れ|できな/;
+function isSnoozed(sid){ const m=(S.settings&&S.settings.retentionSnooze)||{}; return !!(m[sid]&&m[sid]>todayISO()); }
+function retentionSnooze(sid){
+  if(!S.settings)S.settings={}; if(!S.settings.retentionSnooze)S.settings.retentionSnooze={};
+  const d=new Date(); d.setDate(d.getDate()+RISK_SNOOZE_DAYS); const p=n=>String(n).padStart(2,'0');
+  pushUndo('継続気がかりを様子見'); S.settings.retentionSnooze[sid]=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+  save(); renderAll(); if(typeof renderCaseBoard==='function')renderCaseBoard();
+}
+function getRetentionRisks(){
+  const now=new Date(), out=[];
+  (S.students||[]).forEach(s=>{
+    if(!s||isSnoozed(s.id))return;
+    const st=studentStats(s.id);
+    if(!st.recent.some(o=>(now-o.d)/86400000<=RISK_ACTIVE_DAYS))return; // 在籍中（直近に授業あり）のみ
+    const reasons=[];
+    if(st.attNG>=2)reasons.push('直近'+st.recent.length+'回中'+st.attNG+'回欠席');
+    if(st.daysNoContact!=null&&st.daysNoContact>=RISK_CONTACT_DAYS)reasons.push('保護者連絡が'+st.daysNoContact+'日なし');
+    const undNeg=st.recent.filter(o=>o.l.smemo&&o.l.smemo.understanding&&_UND_NEG.test(o.l.smemo.understanding)).length;
+    if(undNeg>=2)reasons.push('理解度に不安の記録が'+undNeg+'回');
+    if(reasons.length)out.push({student:s, reasons});
+  });
+  return out;
+}
+/* ---------------- B3 面談準備パック（生徒の直近を集約＋アジェンダ草案＋面談を連絡ログへ記録）---------------- */
+function studentStats(sid){
+  const now=new Date();
+  const mine=(S.lessons||[]).filter(l=>l&&l.studentId===sid).map(l=>({l,d:lessonDate(l)})).filter(o=>o.d).sort((a,b)=>b.d-a.d);
+  const past=mine.filter(o=>o.d<=now), recent=past.slice(0,6);
+  let att0=0,attNG=0,attMiss=0;
+  recent.forEach(o=>{ if(o.l.att==='出席')att0++; else if(o.l.att==='欠席')attNG++; else attMiss++; });
+  const lastSmemo=(past.find(o=>o.l.smemo&&(o.l.smemo.progress||o.l.smemo.homework||o.l.smemo.understanding||o.l.smemo.next))||{}).l||null;
+  const contacts=(S.contacts||[]).filter(c=>c&&c.studentId===sid).sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+  const lastContact=contacts[0]||null;
+  const daysNoContact=lastContact?Math.floor((now-new Date(lastContact.at))/86400000):null;
+  const openCases=(S.cases||[]).filter(c=>c&&c.studentId===sid&&c.status!=='done');
+  const handovers=(S.handovers||[]).filter(h=>h&&h.studentId===sid).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  return {recent,att0,attNG,attMiss,lastSmemo,contacts,lastContact,daysNoContact,openCases,handovers};
+}
+function buildMeetingAgenda(sid){
+  const s=studentById(sid), st=studentStats(sid), L=[];
+  L.push('【面談メモ：'+(s?s.name:'')+'さん'+(s&&s.grade?'（'+s.grade+'）':'')+'】'); L.push('');
+  L.push('■事実');
+  L.push('・直近'+st.recent.length+'回：出席'+st.att0+'／欠席'+st.attNG+(st.attMiss?'／未記録'+st.attMiss:''));
+  if(st.lastSmemo&&st.lastSmemo.smemo){const m=st.lastSmemo.smemo; if(m.progress)L.push('・直近の進度：'+m.progress); if(m.understanding)L.push('・理解度：'+m.understanding); if(m.homework)L.push('・宿題：'+m.homework);}
+  if(st.lastContact)L.push('・最終連絡：'+String(st.lastContact.at).slice(0,10)+'（'+(st.lastContact.type||'')+'）');
+  L.push('');
+  L.push('■懸念');
+  const conc=[];
+  if(st.attNG>=2)conc.push('欠席が続いています（直近'+st.recent.length+'回中'+st.attNG+'回）');
+  if(st.daysNoContact!=null&&st.daysNoContact>=30)conc.push('保護者連絡が'+st.daysNoContact+'日ありません');
+  if(st.openCases.length)conc.push('未対応の欠席案件が'+st.openCases.length+'件');
+  if(!conc.length)conc.push('（大きな懸念は見当たりません）');
+  conc.forEach(c=>L.push('・'+c));
+  L.push('');
+  L.push('■提案・次の目標');
+  if(st.lastSmemo&&st.lastSmemo.smemo&&st.lastSmemo.smemo.next)L.push('・次回の重点：'+st.lastSmemo.smemo.next);
+  L.push('・［要記入：今後1か月の目標］'); L.push('');
+  L.push('■保護者に確認したいこと'); L.push('・［要記入］');
+  return L.join('\n');
+}
+function renderMeetingPack(sid){
+  const box=$('mtgPack'); if(!box)return; box.innerHTML='';
+  if(!sid){ box.textContent='生徒を選んでください。'; $('mtgAgenda').value=''; return; }
+  const s=studentById(sid), st=studentStats(sid);
+  const line=t=>box.append(el('div',{style:'font-size:13px',text:t}));
+  box.append(el('div',{style:'font-weight:700',text:(s?s.name:'')+(s&&s.grade?'（'+s.grade+'）':'')}));
+  line('出席（直近'+st.recent.length+'回）：出席'+st.att0+'／欠席'+st.attNG+(st.attMiss?'／未記録'+st.attMiss:''));
+  line('最終連絡：'+(st.lastContact?String(st.lastContact.at).slice(0,10)+'（'+(st.lastContact.type||'')+'）'+(st.daysNoContact!=null?'・'+st.daysNoContact+'日前':''):'記録なし'));
+  line('未対応の欠席案件：'+st.openCases.length+'件'+(st.handovers.length?'／引き継ぎ記録'+st.handovers.length+'件':''));
+  if(st.lastSmemo&&st.lastSmemo.smemo){const m=st.lastSmemo.smemo;const seg=[m.progress&&('進度:'+m.progress),m.understanding&&('理解:'+m.understanding)].filter(Boolean).join('／');if(seg)line('直近メモ：'+seg);}
+  $('mtgAgenda').value=buildMeetingAgenda(sid);
+}
+function openMeetingDlg(sid){
+  const sel=$('mtgStudent'); sel.innerHTML='';
+  (S.students||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).forEach(s=>sel.append(el('option',{value:s.id,text:s.name+(s.grade?'（'+s.grade+'）':'')})));
+  if(sid)sel.value=sid;
+  $('mtgNote').value=''; $('mtgFollowup').value='';
+  renderMeetingPack(sel.value);
+  $('meetingDlg').showModal();
+}
+function recordMeeting(){
+  const sid=$('mtgStudent').value; if(!sid){toast('生徒を選んでください');return;}
+  const s=studentById(sid);
+  if(!Array.isArray(S.contacts))S.contacts=[];
+  pushUndo('面談を記録');
+  const fu=$('mtgFollowup').value||'';
+  S.contacts.push({id:uid(),studentId:sid,studentName:s?s.name:'',type:'面談',note:$('mtgNote').value.trim(),at:new Date().toISOString(),followup:fu,done:false});
+  save(); renderAll(); if(typeof renderCaseBoard==='function')renderCaseBoard();
+  toast('面談を記録しました'+(fu?('（'+fu+'に確認）'):''));
+  $('mtgNote').value=''; $('mtgFollowup').value=''; renderMeetingPack(sid);
+}
+$('btnMeeting')&&($('btnMeeting').onclick=()=>openMeetingDlg());
+$('mtgStudent')&&($('mtgStudent').onchange=()=>{$('mtgNote').value='';$('mtgFollowup').value='';renderMeetingPack($('mtgStudent').value);});
+$('mtgCopy')&&($('mtgCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('mtgAgenda').value);toast('アジェンダをコピーしました');}catch(e){toast('コピーできませんでした。長押しで選択してください');}});
+$('mtgRecord')&&($('mtgRecord').onclick=recordMeeting);
+$('mtgClose')&&($('mtgClose').onclick=()=>$('meetingDlg').close());
+
+/* ---------------- B2 保護者向け 学習レポート草案（月次のsmemo集約→藤田文体。送信は人）---------------- */
+function ymOf(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function lessonsInMonth(sid,ym){
+  return (S.lessons||[]).filter(l=>l&&l.studentId===sid).map(l=>({l,d:lessonDate(l)})).filter(o=>o.d&&ymOf(o.d)===ym).sort((a,b)=>a.d-b.d);
+}
+function buildLearningReport(sid,ym){
+  const s=studentById(sid), arr=lessonsInMonth(sid,ym), m=Number((ym||'-').split('-')[1]);
+  const L=[]; L.push((s?familyName(s.name):'')+'様'); L.push('');
+  L.push('お世話になっております。武蔵野個別指導塾の藤田です。');
+  L.push(m+'月の'+(s?s.name:'')+'さんのご様子をお伝えいたします。'); L.push('');
+  if(!arr.length){ L.push('（'+m+'月の授業記録が見つかりませんでした。月をご確認ください）'); L.push(''); L.push(PARENT_SIGN); return L.join('\n'); }
+  let att0=0,ng=0; arr.forEach(o=>{ if(o.l.att==='出席')att0++; else if(o.l.att==='欠席')ng++; });
+  L.push('■通塾：'+arr.length+'回（出席'+att0+'・欠席'+ng+'）');
+  const pick=k=>arr.map(o=>o.l.smemo&&o.l.smemo[k]).filter(Boolean);
+  const prog=pick('progress'), hw=pick('homework'), und=pick('understanding'), next=pick('next');
+  if(prog.length){ L.push('■取り組んだ内容'); prog.slice(-4).forEach(x=>L.push('・'+x)); }
+  if(und.length)L.push('■理解のご様子：'+und[und.length-1]);
+  if(hw.length)L.push('■宿題の取り組み：'+hw[hw.length-1]);
+  if(next.length)L.push('■来月の重点：'+next[next.length-1]);
+  const recorded=arr.filter(o=>smemoHasContent(o.l.smemo)).length;
+  if(recorded<arr.length)L.push('　※授業メモを記録できたのは '+recorded+'/'+arr.length+'回分です（記載のない回は割愛しています）');
+  L.push(''); L.push('引き続きどうぞよろしくお願いいたします。'); L.push(''); L.push(PARENT_SIGN);
+  return L.join('\n');
+}
+function renderReport(){
+  const sid=$('rptStudent').value, ym=$('rptMonth').value;
+  $('rptText').value=(sid&&ym)?buildLearningReport(sid,ym):'';
+}
+function fillReportMonths(sid){
+  const sel=$('rptMonth'), prev=sel.value; sel.innerHTML='';
+  const set=new Set();
+  (S.lessons||[]).filter(l=>l&&l.studentId===sid).forEach(l=>{const d=lessonDate(l);if(d)set.add(ymOf(d));});
+  set.add(ymOf(new Date()));
+  const months=[...set].sort().reverse();
+  months.forEach(ym=>{const[y,m]=ym.split('-');sel.append(el('option',{value:ym,text:y+'年'+Number(m)+'月'}));});
+  // 直近で授業のある月を既定に
+  const withData=months.find(ym=>lessonsInMonth(sid,ym).length);
+  sel.value=(prev&&months.includes(prev))?prev:(withData||months[0]||'');
+}
+function openReportDlg(sid){
+  const sel=$('rptStudent'); sel.innerHTML='';
+  (S.students||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).forEach(s=>sel.append(el('option',{value:s.id,text:s.name+(s.grade?'（'+s.grade+'）':'')})));
+  if(sid)sel.value=sid;
+  fillReportMonths(sel.value); renderReport();
+  $('reportDlg').showModal();
+}
+$('btnReport')&&($('btnReport').onclick=()=>openReportDlg());
+$('rptStudent')&&($('rptStudent').onchange=()=>{fillReportMonths($('rptStudent').value);renderReport();});
+$('rptMonth')&&($('rptMonth').onchange=renderReport);
+$('rptCopy')&&($('rptCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('rptText').value);toast('コピーしました。ご自身で送信してください');}catch(e){toast('コピーできませんでした。長押しで選択してください');}});
+$('rptClose')&&($('rptClose').onclick=()=>$('reportDlg').close());
 
 /* ---------------- 希望時間帯ダイアログ ---------------- */
 let prefEditingStudentId=null;
