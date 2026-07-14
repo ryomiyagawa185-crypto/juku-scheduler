@@ -1163,7 +1163,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.21.0';
+const APP_VER='2.22.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -4282,19 +4282,25 @@ $('importFile').onchange=e=>{
     if(typeof auditDoubleBookings==='function'){try{const _b=S;S=data;gate=auditDoubleBookings();S=_b;}catch(_e){}}
     const sev=(gate.studentDup||[]).length+(gate.teacherDup||[]).length+(gate.overCap||[]).length; // 重大（不可レベル）
     const ngN=(gate.teacherNG||[]).length; // 講師NG（要確認レベル）
+    // A②：未知スロット（標準7枠 sl0/sl0b/sl1..sl5 に無いslotId）＝抽出ミスの疑い。meta.sourceStatsも参照
+    const _STDSLOT=new Set(['sl0','sl0b','sl1','sl2','sl3','sl4','sl5']);
+    const unkSlot=Math.max((data.lessons||[]).filter(l=>l&&!_STDSLOT.has(l.slotId)).length,
+      (data.meta&&data.meta.sourceStats&&data.meta.sourceStats.unknownSlotCount)||0);
     let gmsg;
-    if(sev||ngN){
+    if(sev||ngN||unkSlot){
       gmsg='\n\n【取込前チェック】'
         +`\n・生徒二重予約：${gate.studentDup.length}件`
         +`\n・講師二重予約：${gate.teacherDup.length}件`
         +`\n・席上限超過：${gate.overCap.length}件`
-        +`\n・講師NG稼働(今日以降)：${ngN}件`;
+        +`\n・講師NG稼働(今日以降)：${ngN}件`
+        +`\n・未知スロット：${unkSlot}件`;
       if(sev)gmsg+=`\n\n⚠ 重大な違反（二重予約・席超過）が ${sev}件 あります。取り込むとこのままアプリに入ります。元シートを直して再取込を強く推奨します。`;
+      if(unkSlot)gmsg+=`\n\n⚠ 未知スロット ${unkSlot}件（標準の時間コマに無い枠）。抽出ミスの可能性が高く、その授業は画面に出ない恐れがあります。再抽出を推奨します。`;
     } else {
-      gmsg='\n\n【取込前チェック】✅ 二重予約・席超過・講師NGは検出されませんでした。';
+      gmsg='\n\n【取込前チェック】✅ 二重予約・席超過・講師NG・未知スロットは検出されませんでした。';
     }
     if(!confirm(`このファイルで全データを置き換えます。\n\n【読み込む】講師${inc.t}・生徒${inc.s}・授業${inc.l}・週${inc.w}${sv}\n【今のデータ】講師${cur.t}・生徒${cur.s}・授業${cur.l}・週${cur.w}${gmsg}\n\n※今のデータは復元用に自動退避します。進めますか？`))return;
-    if(sev&&!confirm(`重大な違反 ${sev}件 を含んだまま取り込みます。本当によろしいですか？（取込後「二重予約を監査する」で詳細を確認できます）`))return;
+    if((sev||unkSlot)&&!confirm(`⚠ 重大な違反 ${sev}件・未知スロット ${unkSlot}件 を含んだまま取り込みます。本当によろしいですか？（取込後「二重予約を監査する」で確認できます）`))return;
     try{localStorage.setItem(LS_KEY+'.recovery',JSON.stringify(S))}catch(e){} // 復元前に現データを退避（押しても消えない）
     S=data;
     // A①：取込JSONのmeta（datasetId/sourceModifiedAt/sourceCheckedAt/coveredWeeks等）を採用し、取込時刻を刻む
