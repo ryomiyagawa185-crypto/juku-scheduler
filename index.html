@@ -1215,7 +1215,7 @@
 
 <script>
 'use strict';
-const APP_VER='2.30.0';
+const APP_VER='2.31.0';
 const LS_KEY='jukuScheduler.v1';
 const DAYS=['月','火','水','木','金','土','日'];
 // スロットmaster（朝2コマは夏時間割用）。id順＝表示順
@@ -2845,7 +2845,24 @@ function getActionSummary(){
   const handovers=(typeof getOpenHandovers==='function')?getOpenHandovers():[];
   const cases=getOpenCases();
   const inbox=(typeof getOpenInbox==='function')?getOpenInbox():[]; // P5 受付メモ
-  return {mk,tasks,handovers,cases,inbox,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length};
+  const unrec=(typeof getUnrecordedAtt==='function')?getUnrecordedAtt():[]; // N1 出席未記録
+  return {mk,tasks,handovers,cases,inbox,unrec,total:mk.length+tasks.length+handovers.length+cases.length+inbox.length+unrec.length};
+}
+// ===== N1 出席未記録ガード：終了したコマで出欠(att)が未入力のものを当日中に潰す =====
+function lessonEndPassed(l){ // 授業コマの終了時刻を過ぎたか
+  const w=S.weeks.find(x=>x.id===l.weekId); if(!w||!w.startDate)return false;
+  const tm=(typeof slotTimes==='function')?slotTimes(slotById(l.slotId)):null; if(!tm)return false;
+  const end=new Date(w.startDate+'T00:00:00'); end.setDate(end.getDate()+Number(l.day)); end.setMinutes(tm.e);
+  return end < new Date();
+}
+function getUnrecordedAtt(){
+  return (S.lessons||[]).filter(l=>{
+    if(!l||!l.studentId)return false;
+    if(l.att==='出席'||l.att==='欠席')return false;         // 記録済みは除外
+    if(l.status==='仮'||l.status==='要振替'||l.status==='振替済')return false; // 仮押さえ・振替系は出欠対象外
+    if(typeof isOperationalWeek==='function'&&!isOperationalWeek(l.weekId))return false; // 終了済み過去週は対象外
+    return lessonEndPassed(l);                              // 終了したコマのみ
+  });
 }
 // ===== P5 電話/LINE受付の1行キュー（open→人が消込。カンバン・自動配置・外部同期はしない）=====
 function getOpenInbox(){return (S.inbox||[]).filter(x=>x&&x.status!=='done');}
@@ -2879,7 +2896,7 @@ function renderCaseBoard(){
   const wn=id=>{const w=S.weeks.find(x=>x.id===id);return w?w.name:'';};
   const sn=id=>{const s=studentById(id);return s?s.name:'(不明)';};
   const sec=t=>el('div',{text:t,style:'font-weight:700;color:var(--danger);margin:8px 0 4px'});
-  const {mk,tasks,handovers,cases,inbox}=getActionSummary();
+  const {mk,tasks,handovers,cases,inbox,unrec}=getActionSummary();
   const tn=id=>{const t=S.teachers.find(x=>x.id===id);return t?t.name:'（全体）';};
   const gotoSwap=()=>{const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="swap"]');if(b)b.click();};
   // P5 受付メモ（電話/LINEの1行キュー）：新規追加＋未処理一覧
@@ -2895,6 +2912,20 @@ function renderCaseBoard(){
         el('button',{class:'small primary',text:'✅ 完了',onclick:()=>inboxDone(x.id)}),
         el('button',{class:'small danger',text:'🗑',onclick:()=>inboxDelete(x.id)})));
       box.append(ic);
+    });
+  }
+  // N1 出席未記録（終了したコマでatt未入力）＝当日中に潰す
+  if(unrec&&unrec.length){
+    box.append(sec('✅ 出席未記録：'+unrec.length+'件（終了したコマ）'));
+    unrec.forEach(l=>{
+      const stu=studentById(l.studentId), sl=slotById(l.slotId);
+      const uc=el('div',{style:'border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px'});
+      uc.append(el('div',{style:'font-weight:600',text:'❓ '+(stu?stu.name:'?')+'さん：'+wn(l.weekId)+' '+(DAYS[l.day]||'')+'曜 '+(sl?sl.label:'')+(l.subject?'・'+l.subject:'')}));
+      uc.append(el('div',{style:'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px'},
+        el('button',{class:'small primary',text:'✓ 出席',onclick:()=>setAtt(l.id,'出席')}),
+        el('button',{class:'small',text:'欠席',onclick:()=>markAbsent(l.id)}),
+        el('button',{class:'small',text:'📅 このコマへ',onclick:()=>{S.ui.weekId=l.weekId;S.ui.day=l.day;const d=$('caseDlg');if(d)d.close();const b=document.querySelector('nav.tabs button[data-tab="grid"]');if(b)b.click();}})));
+      box.append(uc);
     });
   }
   // A. 振替期限（超過／3日以内）＝放置すると振替権利が失効する案件
@@ -2954,7 +2985,7 @@ function renderCaseBoard(){
       box.append(card);
     });
   }
-  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
+  if(!mk.length&&!tasks.length&&!handovers.length&&!cases.length&&!(inbox&&inbox.length)&&!(unrec&&unrec.length))box.append(el('div',{text:'✅ 要対応はありません。',style:'color:var(--sub);font-size:13px'}));
   const done=(S.cases||[]).filter(c=>c.status==='done').length;
   if(done)box.append(el('div',{text:'（完了した欠席案件：'+done+'件）',style:'font-size:11px;color:var(--sub);margin-top:6px'}));
 }
@@ -3120,6 +3151,7 @@ function renderToday(){
     if(l.status!=='通常')badges.push(el('span',{class:'badge',text:l.status}));
     if(l.att==='出席')badges.push(el('span',{class:'attbadge att-ok',text:'✓出席'}));
     if(l.att==='欠席')badges.push(el('span',{class:'attbadge att-ng',text:'欠席'}));
+    if(!l.att&&l.status!=='仮'&&l.status!=='要振替'&&l.status!=='振替済'&&lessonEndPassed(l))badges.push(el('span',{class:'attbadge',style:'background:#fff3cd;color:#8a6d00',text:'未記録'})); // N1 終了コマの出欠未入力
     if(l.notified)badges.push(el('span',{class:'attbadge att-line',text:'LINE済'}));
     card.append(el('div',{class:'tcard-h'},
       el('span',{class:'tcard-time',text:sl?sl.label:''}),
@@ -3144,7 +3176,7 @@ function renderToday(){
     list.append(card);
   });
 }
-function setAtt(id,val){const l=S.lessons.find(x=>x.id===id);if(!l)return;pushUndo('出欠：'+val);l.att=(l.att===val?'未':val);save();renderToday();renderGrid();toast(l.att==='未'?'出欠を取り消しました':(val+'にしました（↩で戻せます）'));}
+function setAtt(id,val){const l=S.lessons.find(x=>x.id===id);if(!l)return;pushUndo('出欠：'+val);l.att=(l.att===val?'未':val);save();renderToday();renderGrid();if(typeof renderCaseBoard==='function')renderCaseBoard();toast(l.att==='未'?'出欠を取り消しました':(val+'にしました（↩で戻せます）'));}
 function markAbsent(id){
   const l=S.lessons.find(x=>x.id===id);if(!l)return;const stu=studentById(l.studentId),sl=slotById(l.slotId);
   if(!confirm((stu?stu.name:'この生徒')+'さん・'+(sl?sl.label:'')+' を欠席にしますか？'))return;
@@ -3276,6 +3308,7 @@ function renderTodaySummary(){
     if(a.handovers.length)parts.push('引継ぎ未送信'+a.handovers.length);
     if(a.cases.length)parts.push('欠席案件'+a.cases.length);
     if(a.inbox&&a.inbox.length)parts.push('受付'+a.inbox.length);
+    if(a.unrec&&a.unrec.length)parts.push('出席未記録'+a.unrec.length);
     wrap.append(el('button',{style:'width:100%;text-align:left;border:1px solid var(--danger);background:transparent;color:var(--danger);border-radius:10px;padding:8px 12px;font-weight:700;display:flex;flex-direction:column;gap:2px;cursor:pointer',onclick:()=>{if(typeof openCaseBoard==='function')openCaseBoard();}},
       el('span',{text:'🗂 要対応 '+a.total+'件（タップで開く）'}),
       el('span',{style:'font-size:12px;font-weight:normal;color:var(--sub)',text:parts.join('・')})));
