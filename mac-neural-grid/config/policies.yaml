@@ -1,0 +1,24 @@
+# ポリシー定義（コードと分離・仕様 §27）。init 時に組込ポリシーとして DB へ登録される。
+# 参照専用のリファレンス。CLI からは `mac-neural-grid policy [name]` で確認する。
+policies:
+  default:
+    external_network: true
+    external_ai_api: false          # 既定でも外部 AI API はオフ（明示許可で有効化）
+    prefer_local_models: true
+
+  confidential-local-only:
+    external_network: false
+    external_ai_api: false
+    artifact_encryption: true
+    allowed_nodes:
+      labels:
+        - trusted
+
+  low-cost:
+    prefer_local_models: true
+    external_api_budget_usd: 1.00
+    external_ai_api: false
+
+  fast:
+    max_nodes: 5
+    external_ai_api: false

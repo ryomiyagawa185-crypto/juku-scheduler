@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://miyagawa.local/mac-neural-grid/task.schema.json",
+  "title": "mac-neural-grid — Task",
+  "description": "src/mac_neural_grid/schemas.py と同期（tests が検証）。",
+  "type": "object",
+  "required": [
+    "type",
+    "executor"
+  ],
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "executor": {
+      "type": "string",
+      "enum": [
+        "shell",
+        "python",
+        "claude-code",
+        "local-llm",
+        "external-api",
+        "ffmpeg",
+        "ocr",
+        "document-summary",
+        "checksum",
+        "custom-script"
+      ]
+    },
+    "input": {
+      "type": [
+        "array",
+        "string",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "argv": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "params": {
+      "type": "object"
+    },
+    "requirements": {
+      "type": "object"
+    },
+    "timeout_s": {
+      "type": [
+        "integer",
+        "number"
+      ]
+    },
+    "max_output_bytes": {
+      "type": "integer"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+# サンプルジョブ: examples/docs/ 配下のテキストを全ノードで分担して要約する。
+# 機密ポリシー（外部 AI API 不使用）で、決定的な抽出要約 executor を用いる（AI 送信ゼロ）。
+job:
+  name: pdf-summary
+  policy: confidential-local-only
+tasks:
+  - type: document-summary
+    input_glob: ./docs/*.txt
+    split: per-file            # データ並列: 1ファイル1タスク
+    executor: document-summary
+    params:
+      sentences: 3
+    requirements:
+      capabilities: []         # 決定的要約はローカルツール不要
+    timeout_s: 60
+aggregation:
+  type: merge-summaries
+  node: control
