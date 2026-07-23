@@ -119,14 +119,16 @@ def cmd_node_inspect(args):
     ctx = Ctx(args)
     nid = _resolve_node(ctx, args.node)
     with ctx.lock():
-        cap = inventory.inspect(ctx.db, nid)
+        cap = inventory.inspect(ctx.db, nid, allow_remote=getattr(args, "allow_remote", False),
+                                ssh_config=ctx.config.get("ssh"))
     return {"node_id": nid, "capabilities": cap}
 
 
 def cmd_node_ping(args):
     ctx = Ctx(args)
-    return {"node_id": args.node, "probe": inventory.ping(ctx.db, _resolve_node(ctx, args.node),
-                                                          ctx.config)}
+    return {"node_id": args.node,
+            "probe": inventory.ping(ctx.db, _resolve_node(ctx, args.node), ctx.config,
+                                    allow_remote=getattr(args, "allow_remote", False))}
 
 
 def cmd_node_trust(args):
@@ -254,7 +256,8 @@ def cmd_job_run(args):
                 "hint": "確認のうえ `job dispatch %s --yes` で実行" % jid}
     with ctx.lock():
         jid, _ = _create_job(ctx, spec, base)
-        result = dispatcher.dispatch_job(ctx.db, ctx.paths, jid, ctx.config, policy)
+        result = dispatcher.dispatch_job(ctx.db, ctx.paths, jid, ctx.config, policy,
+                                         allow_remote=getattr(args, "allow_remote", False))
     return {"ok": result["ok"], "job_id": jid, "summary": result}
 
 
@@ -270,7 +273,8 @@ def cmd_job_dispatch(args):
         return {"ok": False, "requires_approval": True, "job_id": args.job,
                 "approval": policy_engine.approval_prompt(spec, None, policy)}
     with ctx.lock():
-        result = dispatcher.dispatch_job(ctx.db, ctx.paths, args.job, ctx.config, policy)
+        result = dispatcher.dispatch_job(ctx.db, ctx.paths, args.job, ctx.config, policy,
+                                         allow_remote=getattr(args, "allow_remote", False))
     return {"ok": result["ok"], "summary": result}
 
 
@@ -372,10 +376,38 @@ def cmd_dashboard(args):
 
 
 def cmd_worker(args):
-    # Worker 常駐(launchd)は Phase 2・明示承認後（§28/§36）。ここでは案内のみ。
+    """worker install: リモートへ package を配備（--allow-remote 必須）。他は Phase 2 案内。"""
+    ctx = Ctx(args)
+    if args.worker_action == "install":
+        if not args.node:
+            return {"ok": False, "error": "worker install には --node が必要"}
+        node = ctx.db.get_node(_resolve_node(ctx, args.node))
+        if node is None:
+            return {"ok": False, "error": "node が無い: %s" % args.node}
+        from .transport import for_node
+        if node["transport"] != "ssh":
+            return {"ok": True, "note": "local ノードは配備不要（Control と同一）"}
+        if not args.allow_remote:
+            return {"ok": False, "requires_approval": True,
+                    "note": "リモート配備は --allow-remote が必要（§36）。rsync で "
+                            "%s へ package を送ります。" % node["host"]}
+        t = for_node(node, ctx.config.get("ssh"), allow_remote=True)
+        res = t.ensure_worker()
+        ctx.db.audit("cli", "worker_install", {"node_id": node["node_id"], "ok": res.get("ok")})
+        return {"ok": bool(res.get("ok")), "node_id": node["node_id"], "result": res,
+                "probe": t.probe()}
+    if args.worker_action == "status":
+        out = []
+        from .transport import for_node
+        for n in ctx.db.list_nodes():
+            if n["transport"] == "ssh":
+                t = for_node(n, ctx.config.get("ssh"), allow_remote=args.allow_remote)
+                out.append({"node_id": n["node_id"], "probe": t.probe()})
+        return {"ssh_nodes": out}
+    # start/stop = launchd 常駐（Phase 2・明示承認後）。
     return {"ok": False, "action": args.worker_action,
-            "note": "Worker 常駐(launchd)は Phase 2。launchd/ のテンプレートを手動検証し、"
-                    "明示承認後に `launchctl load` してください（本 MVP は自動登録しない・§28/§36）。"}
+            "note": "Worker 常駐(launchd)は Phase 2。launchd/ を手動検証し、明示承認後に "
+                    "`launchctl bootstrap` してください（自動登録しない・§28/§36）。"}
 
 
 def cmd_backup(args):
@@ -502,6 +534,9 @@ def build_parser():
         nsub.add_parser(name)
     for name in ("inspect", "ping", "remove", "disable"):
         sp = nsub.add_parser(name); sp.add_argument("node")
+        if name in ("inspect", "ping"):
+            sp.add_argument("--allow-remote", dest="allow_remote", action="store_true",
+                            help="SSH ノードへ実接続して調査（§36）")
     t = nsub.add_parser("trust"); t.add_argument("node"); t.add_argument(
         "--level", required=True, choices=schemas.TRUST_LEVELS)
 
@@ -513,8 +548,11 @@ def build_parser():
         sp.add_argument("--prompt"); sp.add_argument("--inputs")
         if name in ("run",):
             sp.add_argument("--yes", action="store_true", help="high_risk を承認して実行")
-    d = jsub.add_parser("dispatch"); d.add_argument("job"); d.add_argument("--yes",
-                                                                           action="store_true")
+            sp.add_argument("--allow-remote", dest="allow_remote", action="store_true",
+                            help="SSH ノードへのリモート実行を承認（§36）")
+    d = jsub.add_parser("dispatch"); d.add_argument("job")
+    d.add_argument("--yes", action="store_true")
+    d.add_argument("--allow-remote", dest="allow_remote", action="store_true")
     for name in ("status", "inspect", "cancel", "retry"):
         sp = jsub.add_parser(name); sp.add_argument("job")
     jsub.add_parser("list")
@@ -528,6 +566,8 @@ def build_parser():
 
     wk = sub.add_parser("worker"); wk.add_argument("worker_action",
                                                    choices=["install", "start", "stop", "status"])
+    wk.add_argument("--node"); wk.add_argument("--allow-remote", dest="allow_remote",
+                                               action="store_true")
     bk = sub.add_parser("backup"); bk.add_argument("--label")
     rs = sub.add_parser("restore"); rs.add_argument("--backup", required=True)
     rs.add_argument("--to"); rs.add_argument("--dry-run", dest="dry_run", action="store_true")

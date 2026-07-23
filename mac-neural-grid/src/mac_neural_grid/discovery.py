@@ -131,12 +131,50 @@ def _ollama_models():
     return []
 
 
-def inspect_node(node):
-    """node の transport に応じて能力を収集する。ssh は Phase 2（明示承認後）。"""
+def inspect_remote(node, ssh_config=None):
+    """リモート Mac の能力を SSH 経由で収集する（Phase 2・要 allow_remote）。
+
+    リモートへ配備した package の同じ inspect_local を `python3 -m mac_neural_grid.discovery`
+    として実行し JSON を得る（空白の無い引数のみ＝SSH 再分割に安全）。python3 が無いリモートは
+    scripts/inspect-node.zsh を代替に使える（別途）。
+    """
+    from .transport import SSHTransport
+    import json
+    t = SSHTransport(node, ssh_config, allow_remote=True)
+    ew = t.ensure_worker()
+    if not ew.get("ok"):
+        return {"node_id": node.get("node_id"), "collected_at": now_iso(),
+                "tools": {}, "models": [], "error": "worker 配備に失敗: %s" % ew.get("stderr")}
+    r = t.run(["python3", "-m", "mac_neural_grid.discovery", node["node_id"]],
+              env={"PYTHONPATH": t.pythonpath()}, timeout=30)
+    if r["exit_code"] != 0:
+        return {"node_id": node.get("node_id"), "collected_at": now_iso(),
+                "tools": {}, "models": [], "error": "remote inspect 失敗: %s" % r["stderr"][:200]}
+    for line in reversed((r["stdout"] or "").strip().splitlines()):
+        try:
+            data = json.loads(line)
+            if isinstance(data, dict) and data.get("node_id"):
+                return data
+        except ValueError:
+            continue
+    return {"node_id": node.get("node_id"), "collected_at": now_iso(),
+            "tools": {}, "models": [], "error": "remote inspect の JSON 解析に失敗"}
+
+
+def inspect_node(node, allow_remote=False, ssh_config=None):
+    """node の transport に応じて能力を収集する。ssh は allow_remote=True の時のみ実接続（§36）。"""
     if node.get("transport") in (None, "local") or node.get("host") in ("localhost",
                                                                          "127.0.0.1"):
         return inspect_local(node.get("node_id", "localhost"))
-    # リモート Mac は scripts/inspect-node.zsh を SSH で実行して JSON を得る設計（未実行）。
+    if allow_remote:
+        return inspect_remote(node, ssh_config)
     return {"node_id": node.get("node_id"), "collected_at": now_iso(),
             "architecture": None, "tools": {}, "models": [],
-            "note": "リモート inspect は明示承認＋Phase 2（inspect-node.zsh）で実施（§36）"}
+            "note": "リモート inspect は --allow-remote が必要（§36）"}
+
+
+if __name__ == "__main__":  # remote 実行用（python3 -m mac_neural_grid.discovery <node_id>）
+    import json as _json
+    import sys as _sys
+    _nid = _sys.argv[1] if len(_sys.argv) > 1 else "remote"
+    print(_json.dumps(inspect_local(_nid), ensure_ascii=False))

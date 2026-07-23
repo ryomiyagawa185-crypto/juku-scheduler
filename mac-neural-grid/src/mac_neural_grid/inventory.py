@@ -35,12 +35,12 @@ def add_node(db, host, user=None, name=None, transport=None, labels=None,
     return node
 
 
-def inspect(db, node_id, actor="cli"):
-    """ノードを調査して能力台帳を更新する（読取専用の調査）。"""
+def inspect(db, node_id, actor="cli", allow_remote=False, ssh_config=None):
+    """ノードを調査して能力台帳を更新する（読取専用の調査）。ssh は allow_remote 時のみ実接続。"""
     node = db.get_node(node_id)
     if node is None:
         raise KeyError("node が無い: %s" % node_id)
-    cap = discovery.inspect_node(node)
+    cap = discovery.inspect_node(node, allow_remote=allow_remote, ssh_config=ssh_config)
     errors = schemas.validate(cap, schemas.CAPABILITY_SCHEMA)
     if errors:
         raise ValueError("capability schema 違反: %s" % "; ".join(errors))
@@ -78,9 +78,9 @@ def remove_node(db, node_id, actor="cli"):
     db.audit(actor, "node_remove", {"node_id": node_id})
 
 
-def ping(db, node_id, config=None):
+def ping(db, node_id, config=None, allow_remote=False):
     from .transport import for_node
     node = db.get_node(node_id)
     if node is None:
         raise KeyError("node が無い: %s" % node_id)
-    return for_node(node, (config or {}).get("ssh")).probe()
+    return for_node(node, (config or {}).get("ssh"), allow_remote=allow_remote).probe()

@@ -6,21 +6,26 @@
 > 「複数 Mac を一つの巨大な GPU に結合した」とは主張しない。各 Mac を *独立ノード* として扱い、
 > 能力ベースでジョブを分割・配置・監査・復旧する分散ジョブ実行基盤である。
 
-## 現状（実装済み・localhost で検証可能）
+## 現状（実装済み）
 
 - 手動ノード登録（SSH host-key 確認を前提・`StrictHostKeyChecking=no` を禁止）
 - 能力調査 `node inspect`（クロスプラットフォーム。macOS 重視で他 OS は graceful degradation）
 - タスク並列 / データ並列（per-file 分割）
-- **localhost の複数 Worker を実プロセス隔離で模擬した統合実行**（`local` transport）
+- **localhost の複数 Worker を実プロセス隔離で実行**（`local` transport）
+- **SSH リモート配送（Phase 2）**: 入力ステージング → リモート Worker 起動 → 成果物フェッチ →
+  checksum 検証。`--allow-remote` の明示承認が必須（§36）。SSH/rsync の argv 構築と配送制御フローは
+  ユニット/シミュレーションテストで検証済み。**実機ネットワーク越しの実接続は未検証**（実機で canary が必要）。
 - SQLite（append-only events からジョブ状態を再構築）
 - checksum つき成果物回収・失敗分類と再試行・cancel・冪等（idempotency key）
 - ポリシー（機密は外部 AI API 不使用）・AI ルーター（決定的処理を優先）・監査ログ・`verify`
 
-## まだ（明示承認・Phase 2 以降）
+実機の複数 Mac で動かす手順 → [`docs/REMOTE-MACS.md`](docs/REMOTE-MACS.md)。
 
-他 Mac への SSH 接続 / SSH 鍵生成・known_hosts 変更 / Worker 配布 / launchd 登録 /
-Homebrew 導入 / 外部 AI API 呼出し / 外部ネットワーク送信 / sudo / リモート実行・転送 /
-複数 Mac への設定変更。これらは本 MVP では**自動実行しない**（§36）。
+## まだ自動実行しない（明示承認・§36）
+
+SSH 鍵生成 / known_hosts 変更 / launchd 常駐登録 / Homebrew 導入 / 外部 AI API 呼出し / sudo /
+ファイアウォール変更 / 複数 Mac への設定一括変更。リモート実行そのものは `--allow-remote` を付けた
+時のみ有効（既定は無効）。新規展開は 1 台ずつ canary で（§32）。
 
 ## インストール
 

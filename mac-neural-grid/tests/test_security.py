@@ -13,16 +13,16 @@ from tests.conftest import run
 
 
 def test_strict_host_key_no_rejected():
-    t = transport.SSHTransport({"host": "h", "user": "u"},
-                               ssh_config={"strict_host_key_checking": "no"})
     with pytest.raises(security.SecurityError):
-        t._ssh_prefix()
+        transport.ssh_opts({"strict_host_key_checking": "no"})
 
 
 def test_ssh_remote_requires_approval():
     t = transport.SSHTransport({"host": "h"}, allow_remote=False)
     with pytest.raises(security.SecurityError):
         t.run(["ls"])
+    with pytest.raises(security.SecurityError):
+        t.put_file("/tmp/a", "/tmp/b")
 
 
 def test_symlink_write_refused(tmp_path):

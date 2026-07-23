@@ -8,6 +8,7 @@ subprocess、リモートは要承認）→ result.json を回収 → 成果物�
 """
 
 import os
+import posixpath
 import subprocess
 import sys
 
@@ -68,9 +69,61 @@ def _run_worker_subprocess(envelope_path, long_running=False):
     return proc.returncode, proc.stdout, proc.stderr
 
 
+def _execute(transport, job_id, task_id, attempt_id, node, spec, caps, policy, limits,
+             local_task_dir, local_dirs):
+    """transport に応じて Worker を実行し、local_task_dir に result.json / output/ を残す。
+
+    local: subprocess で worker を起動（work_base はローカル）。
+    remote(ssh/sim): 入力を remote へ staging → remote worker 起動 → result/output/manifest を
+    checksum つきで fetch（一時名→checksum→原子的改名は artifact_store.collect が担保）。
+    """
+    ttl = max(3600, int(limits["timeout_s"]) * 2)
+    if getattr(transport, "remote", False):
+        remote_root = transport.remote_task_root(job_id, task_id)
+        transport.ensure_worker()
+        for src in spec.get("input") or []:
+            if os.path.exists(src):
+                transport.put_file(src, posixpath.join(remote_root, "input",
+                                                        os.path.basename(src)))
+        env = build_envelope(job_id, task_id, attempt_id, node, spec, caps, policy, limits,
+                             remote_root, posixpath.join(remote_root, "result.json"),
+                             ttl_s=ttl)
+        env_local = security.safe_join(local_task_dir, "envelope-%s.json" % attempt_id)
+        security.atomic_write_json(env_local, env)
+        transport.put_file(env_local, posixpath.join(remote_root, "envelope.json"))
+        r = transport.run(["python3", "-m", "mac_neural_grid.worker", "--envelope",
+                           posixpath.join(remote_root, "envelope.json")],
+                          timeout=limits["timeout_s"],
+                          env={"PYTHONPATH": transport.pythonpath()},
+                          allowlist=security.DEFAULT_COMMAND_ALLOWLIST)
+        for name in ("result.json", "manifest.json"):
+            try:
+                transport.get_file(posixpath.join(remote_root, name),
+                                   security.safe_join(local_task_dir, name))
+            except Exception:  # noqa: BLE001 — fetch 失敗は下で node_offline 扱い
+                pass
+        transport.get_dir(posixpath.join(remote_root, "output"), local_dirs["output"])
+        return _json_file(security.safe_join(local_task_dir, "result.json")) or {
+            "status": "failed", "failure_class": "node_offline",
+            "stderr_excerpt": (r.get("stderr") or r.get("stdout") or "")[:500]}
+    # local
+    env = build_envelope(job_id, task_id, attempt_id, node, spec, caps, policy, limits,
+                         local_task_dir, security.safe_join(local_task_dir, "result.json"),
+                         ttl_s=ttl)
+    env_path = security.safe_join(local_task_dir, "envelope-%s.json" % attempt_id)
+    security.atomic_write_json(env_path, env)
+    rc, out, err = _run_worker_subprocess(env_path, long_running=limits["timeout_s"] >= 300)
+    return _json_file(env["result_destination"]) or {
+        "status": "failed", "failure_class": "unknown", "stderr_excerpt": (err or out)[:500]}
+
+
 def dispatch_job(db, paths, job_id, config=None, policy=None, exclude_global=None,
-                 allow_remote=False, actor="cli"):
-    """ジョブの全 pending タスクを配送・回収する。冪等・再試行つき。"""
+                 allow_remote=False, actor="cli", transport_factory=None):
+    """ジョブの全 pending タスクを配送・回収する。冪等・再試行つき。
+
+    transport_factory(node) を渡すと transport 生成を差し替えられる（テストで remote 経路を
+    ネットワーク無しに検証するための注入点）。既定は for_node（local / ssh）。
+    """
     config = config or config_mod.DEFAULT_CONFIG
     policy = policy or {}
     job = db.get_job(job_id)
@@ -79,6 +132,9 @@ def dispatch_job(db, paths, job_id, config=None, policy=None, exclude_global=Non
     nodes = db.list_nodes(enabled_only=True)
     if not nodes:
         return {"ok": False, "error": "有効なノードが無い（node add で登録）"}
+    if transport_factory is None:
+        def transport_factory(node):
+            return for_node(node, config.get("ssh"), allow_remote=allow_remote)
     db.set_job_status(job_id, "running")
     db.audit(actor, "dispatch_job", {"job_id": job_id, "nodes": [n["node_id"] for n in nodes]})
     max_retries = config.get("default_max_retries", 2)
@@ -119,13 +175,7 @@ def dispatch_job(db, paths, job_id, config=None, policy=None, exclude_global=Non
                     for k in ("input", "work", "output", "logs")}
             for d in dirs.values():
                 security.makedirs(d)
-            _stage_inputs(spec, dirs["input"])
-            env = build_envelope(job_id, task["task_id"], attempt_id, node, spec,
-                                 node.get("capabilities"), policy, limits, task_dir,
-                                 security.safe_join(task_dir, "result.json"),
-                                 ttl_s=max(3600, int(limits["timeout_s"]) * 2))
-            env_path = security.safe_join(task_dir, "envelope-%s.json" % attempt_id)
-            security.atomic_write_json(env_path, env)
+            _stage_inputs(spec, dirs["input"])   # local ステージング（remote は _execute 内）
             db.incr_task_attempts(task["task_id"])
             db.set_task_status(task["task_id"], "assigned", node_id=node["node_id"],
                                kind="task_assigned")
@@ -133,27 +183,33 @@ def dispatch_job(db, paths, job_id, config=None, policy=None, exclude_global=Non
                                kind="task_started")
             db.audit(actor, "dispatch_task", {"task_id": task["task_id"],
                                               "node_id": node["node_id"],
-                                              "attempt": attempt_no, "why": sel})
-
-            transport = for_node(node, config.get("ssh"), allow_remote=allow_remote)
-            if transport.kind == "ssh":
+                                              "attempt": attempt_no, "transport": None,
+                                              "why": sel})
+            started = now_iso()
+            try:
+                transport = transport_factory(node)
+            except security.SecurityError as exc:
                 final = {"status": "failed", "failure_class": "policy_denied",
-                         "stderr_excerpt": "SSH 実行は明示承認が必要（§36）"}
+                         "stderr_excerpt": str(exc)}
                 db.set_task_status(task["task_id"], "failed", kind="task_failed")
                 break
-
-            rc, out, err = _run_worker_subprocess(
-                env_path, long_running=limits["timeout_s"] >= 300)
-            result = _json_file(env["result_destination"]) or {
-                "status": "failed", "failure_class": "unknown",
-                "stderr_excerpt": (err or out)[:500]}
+            try:
+                result = _execute(transport, job_id, task["task_id"], attempt_id, node,
+                                  spec, node.get("capabilities"), policy, limits,
+                                  task_dir, dirs)
+            except security.SecurityError as exc:
+                # リモート実行が未承認（allow_remote=False）等はここに来る。
+                db.set_task_status(task["task_id"], "failed", kind="task_failed")
+                final = {"status": "failed", "failure_class": "policy_denied",
+                         "stderr_excerpt": str(exc)}
+                break
             fc = retry.classify(result)
             db.record_attempt({"attempt_id": attempt_id, "task_id": task["task_id"],
                                "attempt_no": attempt_no, "node_id": node["node_id"],
                                "status": result.get("status"),
                                "exit_code": result.get("exit_code"), "failure_class": fc,
                                "duration_s": result.get("duration_s"),
-                               "started_at": env["created_at"], "ended_at": now_iso()})
+                               "started_at": started, "ended_at": now_iso()})
 
             if result.get("status") == "succeeded":
                 manifest = _json_file(security.safe_join(task_dir, "manifest.json"))
