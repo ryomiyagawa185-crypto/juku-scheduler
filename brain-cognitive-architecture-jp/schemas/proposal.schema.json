@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://miyagawa.local/brain-cognitive-architecture-jp/proposal.schema.json",
+  "title": "Brain Cognitive Architecture — Self-modification proposal",
+  "description": "正本は event log。memory/edge は派生 snapshot の要素。本ファイルは scripts/brain_architecture/schemas.py と同期（tests/unit/test_schemas_sync.py が検証）。",
+  "type": "object",
+  "required": [
+    "proposal_id",
+    "type",
+    "status",
+    "rationale",
+    "created_at"
+  ],
+  "properties": {
+    "proposal_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "semantic",
+        "procedure",
+        "edge",
+        "deprecation",
+        "skill_change"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "approved",
+        "rejected",
+        "applied",
+        "rolled_back"
+      ]
+    },
+    "target_level": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        null
+      ]
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "diff": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "expected_effect": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "side_effects": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "counterexamples": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "approved_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "session",
+        "task",
+        "project",
+        "client",
+        "organization",
+        "user",
+        "machine",
+        "global"
+      ]
+    }
+  }
+}
