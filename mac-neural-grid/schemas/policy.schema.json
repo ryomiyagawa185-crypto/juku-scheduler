@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://miyagawa.local/mac-neural-grid/policy.schema.json",
+  "title": "mac-neural-grid — Policy",
+  "description": "src/mac_neural_grid/schemas.py と同期（tests が検証）。",
+  "type": "object",
+  "properties": {
+    "external_network": {
+      "type": "boolean"
+    },
+    "external_ai_api": {
+      "type": "boolean"
+    },
+    "prefer_local_models": {
+      "type": "boolean"
+    },
+    "external_api_budget_usd": {
+      "type": "number"
+    },
+    "max_nodes": {
+      "type": "integer"
+    },
+    "artifact_encryption": {
+      "type": "boolean"
+    },
+    "allowed_nodes": {
+      "type": "object"
+    },
+    "require_power": {
+      "type": "boolean"
+    },
+    "min_battery_percent": {
+      "type": "number"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  mac-neural-grid Worker 常駐用 LaunchAgent テンプレート（仕様 §28）。
+
+  重要（§28/§36）:
+    - ユーザー単位の LaunchAgent（~/Library/LaunchAgents/）に置く。sudo/システム全体には入れない。
+    - 絶対パスと明示的な環境変数を使う（下の PLACEHOLDER を実パスへ置換）。
+    - 登録前に必ず `plutil -lint` で検証し、手動実行で動作確認する。
+    - 登録は明示的な承認後に:  launchctl bootstrap gui/$(id -u) <このplist>
+    - 無効化:  launchctl bootout gui/$(id -u)/com.miyagawa.mac-neural-grid.worker
+    - 本 MVP は自動登録しない。まず1台で canary 検証してから展開する（§32）。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.miyagawa.mac-neural-grid.worker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>-m</string>
+        <string>mac_neural_grid.worker_daemon</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/ABSOLUTE/PATH/TO/mac-neural-grid/src</string>
+        <key>MNG_HOME</key>
+        <string>/Users/USERNAME/Library/Application Support/mac-neural-grid</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 重複起動防止 + クラッシュ時のみ再起動（無期限スパムを避ける）。 -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>Crashed</key>
+        <true/>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>Nice</key>
+    <integer>5</integer>
+
+    <!-- ログ（ローテーションは newsyslog / 手動運用で実施）。 -->
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME/Library/Logs/mac-neural-grid/worker.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME/Library/Logs/mac-neural-grid/worker.err.log</string>
+</dict>
+</plist>

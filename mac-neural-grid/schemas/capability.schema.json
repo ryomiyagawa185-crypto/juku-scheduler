@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://miyagawa.local/mac-neural-grid/capability.schema.json",
+  "title": "mac-neural-grid — Capability",
+  "description": "src/mac_neural_grid/schemas.py と同期（tests が検証）。",
+  "type": "object",
+  "required": [
+    "node_id",
+    "collected_at"
+  ],
+  "properties": {
+    "node_id": {
+      "type": "string"
+    },
+    "collected_at": {
+      "type": "string"
+    },
+    "os_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "architecture": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cpu": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cpu_cores": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "memory_gb": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "free_disk_gb": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "gpu": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "power_source": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "battery_percent": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "thermal_state": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tools": {
+      "type": "object"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
