@@ -83,7 +83,10 @@ def main() -> int:
     args = parser.parse_args()
 
     here = Path(__file__).parent
-    files = sorted(p for p in here.glob("*.md") if re.match(r"^\d{2}_", p.name))
+    # 00_ は運用戦略のドキュメントで求人票ではないため除外する
+    files = sorted(
+        p for p in here.glob("*.md") if re.match(r"^(?!00_)\d{2}_", p.name)
+    )
 
     if args.live:
         wanted = {n.zfill(2) for n in args.live}
