@@ -79,6 +79,22 @@ def build(number: str, path: Path, body_rel: str) -> str:
 あなたはローカルのClaude Codeで、Chrome操作のMCP（claude-in-chrome）が使える環境にいます。
 以下の求人を Indeed に投稿してください。**投稿するのはこの1件だけです。**
 
+## 0. ファイルの所在（重要）
+
+参照するファイルは、すべて次のリポジトリの中にあります。**ホームディレクトリ直下ではありません。**
+
+- リポジトリ：`https://github.com/ryomiyagawa185-crypto/juku-scheduler`
+- ブランチ：`claude/musashino-juku-recruitment-9t4kx0`
+- 求人票：`recruitment/indeed/<番号>_<職種>.md`（番号はこのファイル名の接頭辞。台帳は同ディレクトリの `00_運用戦略_数学英語採用.md`）
+
+未クローンなら先に取得してください。
+
+```bash
+git clone https://github.com/ryomiyagawa185-crypto/juku-scheduler.git
+cd juku-scheduler
+git checkout claude/musashino-juku-recruitment-9t4kx0
+```
+
 ## 1. 手順
 
 1. Chrome操作ツールを読み込む
