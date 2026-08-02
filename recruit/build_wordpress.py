@@ -31,7 +31,6 @@ SLUGS = {
     "koushi-chuju.html": "/recruit/koushi-chuju/",
     "koushi-kokosei.html": "/recruit/koushi-kokosei/",
     "jimu.html": "/recruit/jimu/",
-    "kyoshitsucho.html": "/recruit/kyoshitsucho/",
 }
 
 WRAPPER = "mk-recruit"
