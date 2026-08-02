@@ -1,0 +1,279 @@
+<!-- 武蔵野個別指導塾 採用ページ｜WordPress 固定ページ貼り付け用 -->
+<!-- カスタムHTMLブロックに、このファイルの中身を全部貼り付けてください -->
+<style>
+.mk-recruit {--bg: #ffffff;
+  --bg-sub: #f5f6f8;
+  --fg: #1a1d23;
+  --fg-sub: #5a6270;
+  --line: #e2e5ea;
+  --accent: #1e5aa8;
+  --accent-fg: #ffffff;
+  --accent-soft: #eaf1fa;
+  --warn-bg: #fff8e6;
+  --warn-line: #e8d08a;
+  --radius: 10px;
+  --maxw: 760px;}
+@media (prefers-color-scheme: dark) {
+  .mk-recruit {--bg: #14171c;
+    --bg-sub: #1b1f26;
+    --fg: #e8eaee;
+    --fg-sub: #a3abb8;
+    --line: #2b313a;
+    --accent: #6fa8e8;
+    --accent-fg: #12161b;
+    --accent-soft: #1d2836;
+    --warn-bg: #2a2418;
+    --warn-line: #5c4d22;}
+}
+.mk-recruit * {box-sizing: border-box;}
+.mk-recruit {margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP",
+    "Yu Gothic", Meiryo, sans-serif;
+  font-size: 16px;
+  line-height: 1.85;
+  letter-spacing: 0.01em;}
+.mk-recruit .wrap {max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 20px;}
+.mk-recruit .site-header {border-bottom: 1px solid var(--line);
+  padding: 18px 0;}
+.mk-recruit .site-header .wrap {display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+  justify-content: space-between;}
+.mk-recruit .site-name {font-size: 17px;
+  font-weight: 700;
+  margin: 0;}
+.mk-recruit .site-name a {color: inherit; text-decoration: none;}
+.mk-recruit .site-meta {font-size: 13px;
+  color: var(--fg-sub);
+  margin: 0;}
+.mk-recruit .hero {padding: 44px 0 8px;}
+.mk-recruit .hero h1 {font-size: clamp(23px, 5.2vw, 32px);
+  line-height: 1.45;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;}
+.mk-recruit .hero .lede {font-size: 16px;
+  color: var(--fg-sub);
+  margin: 0;}
+.mk-recruit h2 {font-size: 20px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+  display: inline-block;}
+.mk-recruit h3 {font-size: 16px;
+  margin: 28px 0 8px;}
+.mk-recruit p {margin: 0 0 16px;}
+.mk-recruit ul, .mk-recruit ol {margin: 0 0 16px; padding-left: 1.4em;}
+.mk-recruit li {margin-bottom: 6px;}
+.mk-recruit a {color: var(--accent);}
+.mk-recruit .jobs {list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+  display: grid;
+  gap: 14px;}
+.mk-recruit .job-card {border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color 0.15s;}
+.mk-recruit .job-card:hover {border-color: var(--accent);}
+.mk-recruit .job-card h3 {margin: 0 0 6px;
+  font-size: 18px;}
+.mk-recruit .job-card h3 a {text-decoration: none;}
+.mk-recruit .job-card h3 a:hover {text-decoration: underline;}
+.mk-recruit .job-card p {margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--fg-sub);}
+.mk-recruit .tags {display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;}
+.mk-recruit .tags li {margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;}
+.mk-recruit .terms {width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  margin: 0 0 16px;}
+.mk-recruit .terms th, .mk-recruit .terms td {border-bottom: 1px solid var(--line);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;}
+.mk-recruit .terms th {width: 32%;
+  min-width: 7em;
+  font-weight: 600;
+  background: var(--bg-sub);
+  white-space: nowrap;}
+.mk-recruit .table-scroll {overflow-x: auto;}
+.mk-recruit .note {background: var(--bg-sub);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 14px 18px;
+  margin: 0 0 20px;
+  font-size: 15px;}
+.mk-recruit .note p:last-child {margin-bottom: 0;}
+.mk-recruit .apply {border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin: 32px 0;
+  background: var(--bg-sub);}
+.mk-recruit .apply h2 {margin-top: 0;
+  border: none;
+  padding: 0;
+  display: block;
+  font-size: 19px;}
+.mk-recruit .btn-row {display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 0;}
+.mk-recruit .btn {display: inline-block;
+  padding: 13px 24px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 16px;}
+.mk-recruit .btn:hover {opacity: 0.88;}
+.mk-recruit .btn.secondary {background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);}
+.mk-recruit .site-footer {border-top: 1px solid var(--line);
+  margin-top: 56px;
+  padding: 28px 0 44px;
+  font-size: 14px;
+  color: var(--fg-sub);}
+.mk-recruit .site-footer p {margin: 0 0 8px;}
+.mk-recruit .back-link {display: inline-block;
+  margin: 32px 0 0;
+  font-size: 15px;}
+</style>
+<div class="mk-recruit wrap">
+<div class="hero">
+    <h2 class="hero-title">教室長候補<br><small style="font-size:0.62em;font-weight:600;color:var(--fg-sub)">正社員／転勤なし・1教室のみの運営</small></h2>
+    <p class="lede">複数教室を巡回するエリアマネージャーではありません。担当するのは、この教室に通う生徒と、ここで働く講師です。</p>
+  </div>
+
+  <h2>仕事内容</h2>
+
+  <h3>1. 生徒・保護者対応（この仕事の中心です）</h3>
+  <ul>
+    <li>入塾相談・体験授業の実施と、受講プランの提案</li>
+    <li>定期面談（学習状況の共有、志望校と現在地のすり合わせ、次学期の受講設計）</li>
+    <li>成績・進路に関する相談対応</li>
+    <li>学習状況に応じたカリキュラムの調整指示</li>
+  </ul>
+
+  <h3>2. 講師のマネジメント</h3>
+  <ul>
+    <li>講師の採用（面接・研修・模擬授業の実施）</li>
+    <li>担当生徒と講師の組み合わせの決定</li>
+    <li>授業報告の確認と、指導方針のフィードバック</li>
+    <li>シフトの調整と、欠員が出たときの補充対応</li>
+  </ul>
+
+  <h3>3. 教室の運営</h3>
+  <ul>
+    <li>授業スケジュールの編成（自社開発のシステムを使用します）</li>
+    <li>生徒数・受講コマ数・継続率などの数値管理</li>
+    <li>教材・備品の管理、教室環境の維持</li>
+  </ul>
+
+  <h3>4. 授業（担当を持つ場合があります）</h3>
+  <p>講師の欠員時や、特定の生徒を直接担当する場合に授業を行います。授業がメイン業務ではありません（目安：週0〜4コマ）。</p>
+
+  <h2>このポジションの実際のところ</h2>
+  <div class="note">
+    <p><strong>繁忙は季節で動きます。</strong>春（新年度）・夏（夏期講習と受験学年の面談）・冬〜2月（受験本番）に業務が集中します。この時期は勤務時間が長くなりやすく、その分、閑散期に休みを取る運用です。</p>
+    <p><strong>数字は追いますが、無理な提案はさせません。</strong>受講コマ数の提案は「その生徒に必要かどうか」で判断してください。必要のない講習を積むことを求めることはありません。</p>
+    <p><strong>講師採用は自分でやります。</strong>本部から人が配属されるのを待つのではなく、募集・面接・育成まで自分で回すポジションです。</p>
+    <p><strong>雑務もあります。</strong>コピー、教室の掃除、備品の発注も業務のうちです。</p>
+  </div>
+
+  <h2>募集要項</h2>
+  <div class="table-scroll">
+    <table class="terms">
+      <tr><th>雇用形態</th><td>正社員（期間の定めなし）<br>試用期間3か月（期間中の労働条件の変更はありません）</td></tr>
+      <tr><th>給与</th><td>月給 260,000円〜380,000円（経験・能力を考慮のうえ決定）<br>賞与：年2回（業績連動）／昇給：年1回</td></tr>
+      <tr><th>勤務時間</th><td>13:00〜22:00（実働8時間・休憩60分／シフト制）<br>講習期間は 9:00〜18:00 等の早番シフトがあります<br>時間外労働あり（月平均20時間程度）</td></tr>
+      <tr><th>休日・休暇</th><td>週休2日制（日曜＋シフトによる1日）／年間休日110日<br>夏季休暇・年末年始休暇（講習期間の日程により調整）／有給休暇（法定どおり付与）／慶弔休暇</td></tr>
+      <tr><th>勤務地</th><td>武蔵野個別指導塾（東京都武蔵野市境2-2-3 渡辺ビル4F）<br><strong>※転勤・他教室への異動はありません</strong></td></tr>
+      <tr><th>応募資格</th><td>学歴不問／社会人経験3年以上、または学習塾・教育業界での実務経験がある方／基本的なPC操作ができる方</td></tr>
+      <tr><th>歓迎</th><td>学習塾・予備校での教室運営・校舎責任者の経験／塾講師・家庭教師・学校教員としての指導経験／営業職・接客業で個人のお客様への提案経験がある方／アルバイト・パートのマネジメント経験がある方</td></tr>
+      <tr><th>求める人物像</th><td>保護者に対して、良い話も良くない話も率直に伝えられる方／講師の成長に時間を割ける方／1つの教室に腰を据えて、数年単位で関わる意思のある方</td></tr>
+      <tr><th>待遇</th><td>各種社会保険完備（健康・厚生年金・雇用・労災）／交通費支給／屋内全面禁煙</td></tr>
+      <tr><th>業務の変更の範囲</th><td>上記「仕事内容」に記載の範囲内／変更なし</td></tr>
+      <tr><th>募集人数</th><td>1名</td></tr>
+    </table>
+  </div>
+
+  <h2>選考の流れ</h2>
+  <ol>
+    <li>お電話でご連絡ください（3日以内に折り返します）</li>
+    <li>面接日程の調整</li>
+    <li>一次面接（教室にて／60分程度）<br>※教室運営の考え方、これまでの経験、生徒・保護者対応の実例をうかがいます</li>
+    <li>二次面接（代表との面接）</li>
+    <li>内定・条件のご提示（面接から1週間以内）</li>
+    <li>入社日の調整（在職中の方は退職時期に合わせて調整します）</li>
+  </ol>
+  <p>応募書類：履歴書（写真貼付）・職務経歴書</p>
+
+  <div class="apply">
+    <h2>応募する</h2>
+    <p>「教室長候補の求人を見た」とお伝えください。在職中の方は、ご都合に合わせて面接日程を調整します。</p>
+    <div class="btn-row">
+      <a class="btn" href="tel:0422277828">電話する（0422-27-7828）</a>
+      <a class="btn secondary" href="/recruit/">他の職種を見る</a>
+    </div>
+    <p style="margin-top:14px;font-size:14px;color:var(--fg-sub)">電話受付：平日15:00〜21:00</p>
+  </div>
+
+  <a class="back-link" href="/recruit/">← 採用情報トップへ</a>
+</div>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "JobPosting",
+  "title": "学習塾の教室長候補",
+  "identifier": { "@type": "PropertyValue", "name": "武蔵野個別指導塾", "value": "MK-2026-05" },
+  "datePosted": "2026-08-02",
+  "validThrough": "2026-10-31T23:59:59+09:00",
+  "employmentType": ["FULL_TIME"],
+  "hiringOrganization": {
+    "@type": "EducationalOrganization",
+    "name": "武蔵野個別指導塾",
+    "sameAs": "https://www.musasinokobetu.com/",
+    "url": "https://www.musasinokobetu.com/"
+  },
+  "jobLocation": {
+    "@type": "Place",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "境2-2-3 渡辺ビル4F",
+      "addressLocality": "武蔵野市",
+      "addressRegion": "東京都",
+      "postalCode": "180-0022",
+      "addressCountry": "JP"
+    }
+  },
+  "baseSalary": {
+    "@type": "MonetaryAmount",
+    "currency": "JPY",
+    "value": { "@type": "QuantitativeValue", "minValue": 260000, "maxValue": 380000, "unitText": "MONTH" }
+  },
+  "workHours": "13:00〜22:00（実働8時間・休憩60分／シフト制）。講習期間は9:00〜18:00等の早番シフトあり。",
+  "qualifications": "学歴不問。社会人経験3年以上、または学習塾・教育業界での実務経験がある方。",
+  "directApply": true,
+  "description": "<p>武蔵境駅すぐの個別指導塾で、1教室の運営を担う教室長候補を募集します。複数教室を巡回するエリアマネージャーではありません。転勤も、他教室への異動もありません。</p><h3>仕事内容</h3><ul><li>生徒・保護者対応：入塾相談・体験授業の実施と受講プランの提案、定期面談、成績・進路に関する相談対応</li><li>講師のマネジメント：講師の採用（面接・研修・模擬授業）、担当生徒と講師の組み合わせの決定、授業報告の確認とフィードバック、シフト調整</li><li>教室の運営：授業スケジュールの編成（自社開発のシステムを使用）、生徒数・受講コマ数・継続率などの数値管理、教材・備品の管理</li><li>授業：講師の欠員時や特定の生徒を直接担当する場合に行います（目安：週0〜4コマ。授業がメイン業務ではありません）</li></ul><h3>勤務時間・休日</h3><p>13:00〜22:00（実働8時間・休憩60分／シフト制）。講習期間は9:00〜18:00等の早番シフトがあります。週休2日制（日曜＋シフトによる1日）、年間休日110日。</p><h3>給与</h3><p>月給260,000円〜380,000円（経験・能力を考慮のうえ決定）。賞与年2回（業績連動）、昇給年1回。</p><h3>応募資格</h3><p>学歴不問。社会人経験3年以上、または学習塾・教育業界での実務経験がある方。</p><h3>待遇</h3><ul><li>各種社会保険完備（健康・厚生年金・雇用・労災）</li><li>交通費支給</li><li>試用期間3か月（期間中の労働条件の変更はありません）</li><li>就業場所の変更なし（転勤・他教室への異動はありません）</li><li>屋内全面禁煙</li></ul>"
+}
+</script>

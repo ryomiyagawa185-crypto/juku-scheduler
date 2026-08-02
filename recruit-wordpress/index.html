@@ -1,0 +1,266 @@
+<!-- 武蔵野個別指導塾 採用ページ｜WordPress 固定ページ貼り付け用 -->
+<!-- カスタムHTMLブロックに、このファイルの中身を全部貼り付けてください -->
+<style>
+.mk-recruit {--bg: #ffffff;
+  --bg-sub: #f5f6f8;
+  --fg: #1a1d23;
+  --fg-sub: #5a6270;
+  --line: #e2e5ea;
+  --accent: #1e5aa8;
+  --accent-fg: #ffffff;
+  --accent-soft: #eaf1fa;
+  --warn-bg: #fff8e6;
+  --warn-line: #e8d08a;
+  --radius: 10px;
+  --maxw: 760px;}
+@media (prefers-color-scheme: dark) {
+  .mk-recruit {--bg: #14171c;
+    --bg-sub: #1b1f26;
+    --fg: #e8eaee;
+    --fg-sub: #a3abb8;
+    --line: #2b313a;
+    --accent: #6fa8e8;
+    --accent-fg: #12161b;
+    --accent-soft: #1d2836;
+    --warn-bg: #2a2418;
+    --warn-line: #5c4d22;}
+}
+.mk-recruit * {box-sizing: border-box;}
+.mk-recruit {margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP",
+    "Yu Gothic", Meiryo, sans-serif;
+  font-size: 16px;
+  line-height: 1.85;
+  letter-spacing: 0.01em;}
+.mk-recruit .wrap {max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 20px;}
+.mk-recruit .site-header {border-bottom: 1px solid var(--line);
+  padding: 18px 0;}
+.mk-recruit .site-header .wrap {display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+  justify-content: space-between;}
+.mk-recruit .site-name {font-size: 17px;
+  font-weight: 700;
+  margin: 0;}
+.mk-recruit .site-name a {color: inherit; text-decoration: none;}
+.mk-recruit .site-meta {font-size: 13px;
+  color: var(--fg-sub);
+  margin: 0;}
+.mk-recruit .hero {padding: 44px 0 8px;}
+.mk-recruit .hero h1 {font-size: clamp(23px, 5.2vw, 32px);
+  line-height: 1.45;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;}
+.mk-recruit .hero .lede {font-size: 16px;
+  color: var(--fg-sub);
+  margin: 0;}
+.mk-recruit h2 {font-size: 20px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+  display: inline-block;}
+.mk-recruit h3 {font-size: 16px;
+  margin: 28px 0 8px;}
+.mk-recruit p {margin: 0 0 16px;}
+.mk-recruit ul, .mk-recruit ol {margin: 0 0 16px; padding-left: 1.4em;}
+.mk-recruit li {margin-bottom: 6px;}
+.mk-recruit a {color: var(--accent);}
+.mk-recruit .jobs {list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+  display: grid;
+  gap: 14px;}
+.mk-recruit .job-card {border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color 0.15s;}
+.mk-recruit .job-card:hover {border-color: var(--accent);}
+.mk-recruit .job-card h3 {margin: 0 0 6px;
+  font-size: 18px;}
+.mk-recruit .job-card h3 a {text-decoration: none;}
+.mk-recruit .job-card h3 a:hover {text-decoration: underline;}
+.mk-recruit .job-card p {margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--fg-sub);}
+.mk-recruit .tags {display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;}
+.mk-recruit .tags li {margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;}
+.mk-recruit .terms {width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  margin: 0 0 16px;}
+.mk-recruit .terms th, .mk-recruit .terms td {border-bottom: 1px solid var(--line);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;}
+.mk-recruit .terms th {width: 32%;
+  min-width: 7em;
+  font-weight: 600;
+  background: var(--bg-sub);
+  white-space: nowrap;}
+.mk-recruit .table-scroll {overflow-x: auto;}
+.mk-recruit .note {background: var(--bg-sub);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 14px 18px;
+  margin: 0 0 20px;
+  font-size: 15px;}
+.mk-recruit .note p:last-child {margin-bottom: 0;}
+.mk-recruit .apply {border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin: 32px 0;
+  background: var(--bg-sub);}
+.mk-recruit .apply h2 {margin-top: 0;
+  border: none;
+  padding: 0;
+  display: block;
+  font-size: 19px;}
+.mk-recruit .btn-row {display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 0;}
+.mk-recruit .btn {display: inline-block;
+  padding: 13px 24px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 16px;}
+.mk-recruit .btn:hover {opacity: 0.88;}
+.mk-recruit .btn.secondary {background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);}
+.mk-recruit .site-footer {border-top: 1px solid var(--line);
+  margin-top: 56px;
+  padding: 28px 0 44px;
+  font-size: 14px;
+  color: var(--fg-sub);}
+.mk-recruit .site-footer p {margin: 0 0 8px;}
+.mk-recruit .back-link {display: inline-block;
+  margin: 32px 0 0;
+  font-size: 15px;}
+</style>
+<div class="mk-recruit wrap">
+<div class="hero">
+    <h2 class="hero-title">生徒の隣に座って、<br>つまずいた一点を一緒に崩す仕事です。</h2>
+    <p class="lede">武蔵野個別指導塾は、武蔵境駅すぐの個別指導塾です。小学1年生から高校3年生までを対象に、講師1名に対して生徒2名までの授業を行っています。</p>
+  </div>
+
+  <h2>募集中の職種</h2>
+
+  <ul class="jobs">
+    <li class="job-card">
+      <h3><a href="/recruit/koushi/">個別指導講師（アルバイト・パート）</a></h3>
+      <p>小中学生・高校生への学習指導。週1日・1日1コマ（90分）から。指導経験は問いません。</p>
+      <ul class="tags">
+        <li>未経験可</li><li>週1日〜</li><li>1コマ90分</li><li>シフト自己申告</li><li>扶養内可</li>
+      </ul>
+    </li>
+    <li class="job-card">
+      <h3><a href="/recruit/koushi-chuju/">個別指導講師（中学受験）</a></h3>
+      <p>小学生の受験指導。受験算数を中心に、志望校と現在地に合わせて指導します。経験者歓迎。</p>
+      <ul class="tags">
+        <li>経験者優遇</li><li>週1日〜</li><li>1コマ2,400円〜</li><li>16:40台のコマ中心</li>
+      </ul>
+    </li>
+    <li class="job-card">
+      <h3><a href="/recruit/koushi-kokosei/">個別指導講師（高校生・英語／数学）</a></h3>
+      <p>高校生の英語・数学。定期テスト対策から共通テスト・二次対策まで。「英語のみ」「数学のみ」も可。</p>
+      <ul class="tags">
+        <li>夜のコマ中心</li><li>週1日〜</li><li>数III対応者優遇</li><li>副業可</li>
+      </ul>
+    </li>
+    <li class="job-card">
+      <h3><a href="/recruit/jimu/">教室運営・事務スタッフ（パート）</a></h3>
+      <p>受付・電話対応・日程管理・書類作成。授業は担当しません。指導経験は不要です。</p>
+      <ul class="tags">
+        <li>指導なし</li><li>週2日・1日3時間〜</li><li>PC基本操作</li><li>扶養内可</li>
+      </ul>
+    </li>
+    <li class="job-card">
+      <h3><a href="/recruit/kyoshitsucho/">教室長候補（正社員）</a></h3>
+      <p>1教室の運営を担うポジション。生徒・保護者対応、講師の採用と育成、教室の数値管理。転勤はありません。</p>
+      <ul class="tags">
+        <li>正社員</li><li>転勤なし</li><li>1教室のみ</li><li>週休2日</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h2>この塾について</h2>
+
+  <div class="table-scroll">
+    <table class="terms">
+      <tr><th>教室名</th><td>武蔵野個別指導塾</td></tr>
+      <tr><th>所在地</th><td>〒180-0022 東京都武蔵野市境2-2-3 渡辺ビル4F</td></tr>
+      <tr><th>最寄駅</th><td>JR中央線・西武多摩川線「武蔵境」駅</td></tr>
+      <tr><th>電話</th><td><a href="tel:0422277828">0422-27-7828</a>（受付：平日15:00〜21:00）</td></tr>
+      <tr><th>ホームページ</th><td><a href="https://www.musasinokobetu.com/">https://www.musasinokobetu.com/</a></td></tr>
+      <tr><th>指導形態</th><td>個別指導（講師1名に対し生徒2名まで）</td></tr>
+      <tr><th>対象</th><td>小学1年生〜高校3年生・既卒</td></tr>
+      <tr><th>対応</th><td>中学受験・高校受験・大学受験／定期テスト・内申対策</td></tr>
+      <tr><th>科目</th><td>算数・数学／国語／英語／理科／社会</td></tr>
+      <tr><th>授業時間</th><td>1コマ90分（10:00-11:30／13:20-14:50／15:00-16:30／16:40-18:10／18:20-19:50／20:00-21:30）</td></tr>
+    </table>
+  </div>
+
+  <h2>働く環境として</h2>
+
+  <h3>大手塾の全国共通カリキュラムではありません</h3>
+  <p>武蔵野市・三鷹市の各中学校は、進度もテストの傾向も学校ごとに違います。当塾はその差に合わせて指導内容を決めています。決められた教材を順番に消化していく仕事ではなく、目の前の生徒が何でつまずいているかを見極める仕事です。</p>
+
+  <h3>事務作業が軽い設計です</h3>
+  <p>授業のコマ割り・出欠・引き継ぎは、自社開発のスケジュール管理システムで一元管理しています。授業のたびに手書きの報告書を作る、といった作業はありません。授業後の入力は10分程度で終わります。</p>
+
+  <h3>担当は固定制です</h3>
+  <p>「毎週火曜16:40のコマ」のように担当が決まります。毎週違う生徒に入る形ではないため、予定が立てやすく、指導の成果も自分の目で確認できます。</p>
+
+  <h3>授業以外の時間にも賃金が出ます</h3>
+  <p>授業前の引き継ぎ確認、授業後の報告入力、研修の時間には、授業給とは別に事務給を支給します。「授業した分だけ」の計算ではありません。</p>
+
+  <div class="apply">
+    <h2>応募・お問い合わせ</h2>
+    <p>各求人ページの応募先へご連絡ください。職種を決めかねている方、勤務条件を先に相談したい方は、お電話でもお受けします。</p>
+    <p>「求人を見た」とお伝えいただければ、担当者におつなぎします。見学だけのご希望でも構いません。</p>
+    <div class="btn-row">
+      <a class="btn" href="tel:0422277828">電話する（0422-27-7828）</a>
+    </div>
+    <p style="margin-top:14px;font-size:14px;color:var(--fg-sub)">電話受付：平日15:00〜21:00</p>
+  </div>
+</div>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "EducationalOrganization",
+  "name": "武蔵野個別指導塾",
+  "url": "https://www.musasinokobetu.com/",
+  "telephone": "+81-422-27-7828",
+  "faxNumber": "+81-422-27-7829",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "境2-2-3 渡辺ビル4F",
+    "addressLocality": "武蔵野市",
+    "addressRegion": "東京都",
+    "postalCode": "180-0022",
+    "addressCountry": "JP"
+  },
+  "description": "東京都武蔵野市にある個別指導塾。小学1年生から高校3年生を対象に、講師1名に対し生徒2名までの個別指導を行う。中学受験・高校受験・大学受験に対応。"
+}
+</script>

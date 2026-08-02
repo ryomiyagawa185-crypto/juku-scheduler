@@ -54,12 +54,15 @@ def parse_day(value: str) -> date | None:
         return None
 
 
-def check_page(path: Path, today: date, seen_ids: dict[str, Path]) -> list[str]:
+def check_page(
+    path: Path, today: date, seen_ids: dict[str, Path], fragment: bool = False
+) -> list[str]:
     errors: list[str] = []
     html = path.read_text(encoding="utf-8")
     name = path.name
 
-    if not CANONICAL_RE.search(html):
+    # WordPress 貼り付け用の断片は canonical をSEOプラグインが出すため対象外
+    if not fragment and not CANONICAL_RE.search(html):
         errors.append(f"{name}: canonical リンクがありません")
 
     # HTMLコメント内の【要確認】は運用メモなので除外し、本文に出るものだけ検出する
@@ -127,6 +130,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="*", help="検査する HTML ファイル（省略時は recruit/*.html）")
     parser.add_argument("--date", help="期限判定の基準日（YYYY-MM-DD／省略時は本日）")
+    parser.add_argument(
+        "--fragment",
+        action="store_true",
+        help="WordPress貼り付け用の断片を検査する（canonical の有無を問わない）",
+    )
     args = parser.parse_args()
 
     today = date.today()
@@ -149,7 +157,7 @@ def main() -> int:
         if not path.exists():
             print(f"見つかりません: {path}", file=sys.stderr)
             return 2
-        all_errors.extend(check_page(path, today, seen_ids))
+        all_errors.extend(check_page(path, today, seen_ids, fragment=args.fragment))
 
     if all_errors:
         for e in all_errors:
