@@ -1,0 +1,25 @@
+{
+  "plan_id": "00000000-0000-0000-0000-0000000000e0",
+  "revision": 1,
+  "parent_revision": null,
+  "revision_reason": null,
+  "created_at": "2026-08-03T22:00:00+09:00",
+  "session_id": null,
+  "user_intent": "P0 の疎通確認（plan revision → policy → 実行層 → トレース）",
+  "session_budget_remaining_usd": 1.0,
+  "review_required": false,
+  "steps": [
+    {
+      "step_id": "s1",
+      "skill_id": "meta.echo",
+      "skill_version": "0.1.0",
+      "inputs": {"message": "origin-ai P0 骨格の疎通確認"},
+      "expected_outputs": ["artifacts/open/echo/echo.txt"],
+      "gates_required": [],
+      "budget_usd": 0.001,
+      "model_id": null,
+      "retry_policy": "auto:2",
+      "depends_on": []
+    }
+  ]
+}

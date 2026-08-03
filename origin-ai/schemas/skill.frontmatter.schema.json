@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "origin-ai/schemas/skill.frontmatter.schema.json",
+  "title": "SKILL.md frontmatter — 全システムの唯一の真実源",
+  "description": "registry/skills.jsonl はこのフロントマターから生成される。台帳を手で編集してはならない。",
+  "type": "object",
+  "required": ["id", "version", "tier", "risk", "stage", "data_class", "budget"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+\\.[a-z0-9-]+$",
+      "description": "<domain>.<skill-name>"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "SemVer。major=契約の破壊的変更 / minor=任意項目・ゲート追加 / patch=契約と eval 合格ラインが不変の変更"
+    },
+    "tier": {"enum": ["reasoning", "execution", "reasoning+execution"]},
+    "risk": {"enum": ["low", "medium", "high"]},
+    "stage": {"enum": ["experimental", "beta", "stable", "deprecated"]},
+    "data_class": {
+      "enum": ["public", "internal", "pii", "privileged"],
+      "description": "pii=生徒・保護者情報 / privileged=事件記録。出力先と保持期間を決定する"
+    },
+    "secrets": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+      "description": "実行層が注入を許可するシークレット名。ここに無いものは注入されない",
+      "default": []
+    },
+    "budget": {
+      "type": "object",
+      "required": ["per_call_usd", "daily_usd"],
+      "additionalProperties": false,
+      "properties": {
+        "per_call_usd": {"type": "number", "exclusiveMinimum": 0},
+        "daily_usd": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+\\.[a-z0-9-]+(>=|==|>)\\d+\\.\\d+\\.\\d+$"
+      },
+      "description": "バージョン範囲つきで書く。例: meta.fact-check-guard>=1.0.0",
+      "default": []
+    },
+    "triggers": {"type": "array", "items": {"type": "string"}, "default": []},
+    "inputs_schema": {"type": "string"},
+    "outputs_schema": {"type": "string"},
+    "retry_policy": {
+      "type": "string",
+      "pattern": "^(none|auto:[1-9])$",
+      "description": "外部作用のあるゲートを持つスキルは none 固定（二重送信防止）",
+      "default": "none"
+    },
+    "eval_pass_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "last_evaluated": {"type": ["string", "null"]},
+    "owner": {"type": "string", "default": "user"},
+    "legacy_shim": {
+      "type": "boolean",
+      "description": "adapters/legacy_skill.py が既定値を補ったスキル。true の間は stage を昇格させない",
+      "default": false
+    }
+  }
+}

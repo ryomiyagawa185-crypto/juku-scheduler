@@ -1,0 +1,61 @@
+{
+  "$comment": [
+    "推論層の権限をここで絞る。これが二層分離の担保の半分",
+    "（もう半分は実行層プロセス側の制限）。",
+    "deny は allow より強い。書き込みと外部送信は plan 経由の実行層に限る。"
+  ],
+  "permissions": {
+    "deny": [
+      "Read(./state/**)",
+      "Read(./traces/**)",
+      "Read(./artifacts/pii/**)",
+      "Read(./artifacts/privileged/**)",
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)"
+    ],
+    "allow": [
+      "Read(./skills/**)",
+      "Read(./docs/**)",
+      "Read(./schemas/**)",
+      "Grep",
+      "Glob",
+      "Bash(python scripts/build_registry.py:*)",
+      "Bash(pytest:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_use.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_use.py\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_end.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

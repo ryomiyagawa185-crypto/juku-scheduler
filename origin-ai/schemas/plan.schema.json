@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "origin-ai/schemas/plan.schema.json",
+  "title": "plan revision（推論層 → 実行層）",
+  "description": "確定した単一ファイルではなく plan_log.jsonl への追記単位。再計画は例外ではなく正常系。",
+  "type": "object",
+  "required": ["plan_id", "revision", "created_at", "user_intent", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "plan_id": {"type": "string"},
+    "revision": {"type": "integer", "minimum": 1},
+    "parent_revision": {"type": ["integer", "null"]},
+    "revision_reason": {"type": ["string", "null"]},
+    "created_at": {"type": "string"},
+    "session_id": {"type": ["string", "null"]},
+    "user_intent": {"type": "string"},
+    "session_budget_remaining_usd": {"type": ["number", "null"]},
+    "review_required": {"type": "boolean", "default": false},
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["step_id", "skill_id", "skill_version", "inputs"],
+        "additionalProperties": false,
+        "properties": {
+          "step_id": {"type": "string"},
+          "skill_id": {"type": "string"},
+          "skill_version": {"type": "string"},
+          "inputs": {"type": "object"},
+          "expected_outputs": {"type": "array", "items": {"type": "string"}, "default": []},
+          "gates_required": {"type": "array", "items": {"type": "string"}, "default": []},
+          "budget_usd": {"type": ["number", "null"]},
+          "model_id": {"type": ["string", "null"]},
+          "retry_policy": {"type": "string", "pattern": "^(none|auto:[1-9])$", "default": "none"},
+          "depends_on": {"type": "array", "items": {"type": "string"}, "default": []}
+        }
+      }
+    }
+  }
+}
