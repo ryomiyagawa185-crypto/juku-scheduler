@@ -1,0 +1,30 @@
+# --- 認証情報・機微情報 -------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Grok CLI（@xai-official/grok）のローカル状態 ------------------------------
+# 資格情報・セッション・MCP 認証情報はコミットしない。
+# 共有したい設定（skills/agents/commands/rules）は個別に除外を解除する。
+.grok/
+!.grok/skills/
+!.grok/agents/
+!.grok/commands/
+!.grok/rules/
+
+# --- Claude Code のローカル状態 -----------------------------------------------
+.claude/settings.local.json
+.claude/sessions/
+
+# --- エディタ / OS ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Node（ビルド工程は無いが、検証用サーバー等で入る場合がある） -------------
+node_modules/
+npm-debug.log*
