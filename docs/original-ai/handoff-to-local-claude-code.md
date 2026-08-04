@@ -1,5 +1,23 @@
 # ローカル Claude Code への引き継ぎ
 
+> ## ⚠️ 先に読むこと（2026-08-04 追記）
+>
+> この引き継ぎ書は、ローカル Mac で **`miyagawa-ai` が既に稼働している**ことを知らずに書かれた。
+> 稼働中の方針（`miyagawa_ai_advice_bundle`）と突き合わせた結果、
+> **`origin-ai` を新規プラットフォームとして作り進めるのは推奨しない。**
+>
+> - 突き合わせ結果: `docs/original-ai/reconciliation-with-miyagawa-ai.md`
+> - `origin-ai/` は **miyagawa-ai への移植元・参照実装**として扱う
+> - 移植する価値があるのは4項目だけ（同ファイル §B）。最優先は
+>   **承認の内容ハッシュ束縛**（`origin-ai/policy/approvals.py`）
+> - 下の T1〜T6 のうち **T1・T2 は撤回**（local Ollama 中心の構成では USD 予算が主要な
+>   コスト軸ではないため）。T3〜T6 も miyagawa-ai 側のロードマップ（バンドル Step 1〜8）が優先
+>
+> 以下の内容は、`origin-ai/` を参照実装として読むときの説明として有効。
+> 新規に作り進める指示としては読まないこと。
+
+---
+
 このファイルは、`origin-ai/` の続きをローカルの Claude Code に任せるための指示書。
 **冒頭の「貼り付け用プロンプト」をそのまま Claude Code に渡せば作業が始まる。**
 
