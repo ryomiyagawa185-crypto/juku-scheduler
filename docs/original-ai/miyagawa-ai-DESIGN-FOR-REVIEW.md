@@ -371,6 +371,7 @@ test result hash
 | GP-3 | no_match | `no_match` を返し、一般知識で補完しない |
 | GP-4 | scope 越境防止 | 別 scope の記憶が Candidate に入らない |
 | GP-5 | local 障害 | 外部 fallback せずに失敗する |
+| GP-6 | **承認の迂回不能性**（§9 Q7 で追加） | アクセシビリティ権限を持つプロセスから、Commit Gateway の承認を通さずに R4 外部作用へ到達できない |
 
 ---
 
@@ -441,8 +442,70 @@ INV-6 の分類は正しい。その上で、「不可」に分類された後�
 「FastAPI が唯一の受付口」という保証は、**Claude Code が同じ Mac から
 Memory DB / Artifact Store / Trace を直接読み書きできる場合に破れる**。
 
+> **2026-08-05 追記: 実質的に答えが出ている。** Q7 のとおり、Claude を含む複数のアプリに
+> アクセシビリティ権限（コンピュータの制御）が付与されている。この権限を持つプロセスは
+> ターミナルへキー入力を送れるため、FastAPI を経由せずファイルへ到達できる。
+> したがって「FastAPI が唯一の受付口」は **アプリ層の設計上の性質であって、
+> OS 層で強制されているものではない**。Q7 とあわせて扱うこと。
+
 - [ ] 直接アクセス不可 → 根拠: ______
-- [ ] 可能 → 対応（FastAPI 経由に限定 / Hooks で同じポリシーを通す）: ______
+- [x] 可能 → 対応（FastAPI 経由に限定 / Hooks で同じポリシーを通す）: ______
+
+### Q7. OS レイヤの権限付与が Trust Boundary を迂回する
+
+**観測（2026-08-05・システム設定のスクリーンショットより）**
+
+| 権限 | 許可されているアプリ |
+|---|---|
+| アクセシビリティ<br>（コンピュータの制御） | BetterSnapTool / Canva / ChatGPT / claude / Claude / Codex Computer Use / Dropbox / Genspark Claw / Google Chrome / LINE / Microsoft Excel / Microsoft Word / Notepad / Safari / Sider / zoom.us / スクリプトエディタ（AEServer は無効） |
+| 画面収録とシステムオーディオ録音 | ChatGPT / claude / Claude / Google Chrome / LINE / Sider / TapRecord / zoom.us（ターミナルは無効） |
+
+**なぜ設計上の問題か**
+
+設計では R4 外部作用を Commit Gateway だけが実行することになっている（SEC-2）。
+しかしこれはアプリ層の取り決めであり、OS 層では次が成立する。
+
+1. **アクセシビリティ権限は、他アプリへのキー入力・クリックの合成を許す。**
+   ターミナルの画面収録が無効でも、アクセシビリティを持つプロセスは
+   **ターミナルへ入力を送れる**ので、そこからファイルにも DB にも到達できる。
+   実質的に「ユーザー権限でのコード実行」と同等と見なすのが安全側。
+2. **アプリ層の承認 UI は合成イベントから保護されない。** macOS の TCC 同意ダイアログは
+   合成クリックに対して保護されているが、**自作の承認画面（Commit Gateway の承認ボタン、
+   Chainlit の承認 UI）は保護対象外**。承認を自動でクリックされ得る。
+3. **画面収録は、設計上の秘匿区分をまたぐ経路になる。** Trace に本文を書かず、
+   sensitivity で保存先を分けても、**画面に表示された事件記録や生徒情報は
+   画面収録権限を持つアプリから読める**。11 章の Network 対策（Ollama を LAN 非公開等）は
+   この経路を塞がない。
+4. **権限を持つアプリの多くが、未信頼データを読む agent である。**
+   ChatGPT / Claude / Codex Computer Use / Genspark Claw / Sider は、Web・PDF・メールを
+   読んで動く。§SEC-4 で「Web / PDF / Model 出力は未信頼」と定めている当の入力が、
+   コンピュータ制御権限を持つプロセスに入っていく。
+   Prompt Injection が成立した場合の到達範囲が、そのままこの権限の範囲になる。
+
+**確認項目**
+
+| # | 項目 | 判定 |
+|---|---|---|
+| Q7-1 | `claude`（小文字・汎用アイコン）と `Claude`（Anthropic アイコン）の2エントリそれぞれについて、bundle ID と署名を特定する | |
+| Q7-2 | アクセシビリティが**業務上必要な**アプリを列挙する（例: BetterSnapTool・Codex Computer Use・Sider） | |
+| Q7-3 | 不要と判断したものを解除する（候補: Dropbox / Microsoft Excel / Microsoft Word / Canva / Notepad / LINE / zoom.us） | |
+| Q7-4 | 画面収録が必要なアプリを列挙する（候補: zoom.us・TapRecord のみ） | |
+| Q7-5 | 事件記録・生徒データを画面に出す作業中に、画面収録権限を持つ agent を動かさない運用にできるか | |
+| Q7-6 | Commit Gateway の承認 UI が、合成イベントで押され得る形になっていないか（物理キー入力の確認・確認語の入力など、合成しにくい確認手段の採用可否） | |
+| Q7-7 | 権限の棚卸しを月次 Architecture Review の定常項目にする | |
+
+**評価への反映**
+
+Golden Path に1本追加することを推奨する。
+
+```text
+GP-6：承認の迂回不能性
+  アクセシビリティ権限を持つプロセスから、
+  Commit Gateway の承認を通さずに R4 外部作用へ到達できないこと
+```
+
+- [ ] 対応済み → 内容: ______
+- [ ] 未対応 → 是正計画: ______
 
 ### Q6. 入力トークンの回帰と、外部 API 経路のキャッシュ階層
 
