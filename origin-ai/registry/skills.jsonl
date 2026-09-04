@@ -1,0 +1,1 @@
+{"budget":{"daily_usd":0.1,"per_call_usd":0.01},"data_class":"internal","depends_on":[],"eval_pass_rate":null,"gates":[],"id":"meta.echo","last_evaluated":null,"legacy_shim":false,"owner":"user","path":"skills/meta/echo","retry_policy":"auto:2","risk":"low","secrets":[],"stage":"experimental","tier":"execution","triggers":["echo","疎通確認"],"version":"0.1.0"}

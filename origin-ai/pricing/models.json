@@ -1,0 +1,19 @@
+{
+  "version": "PLACEHOLDER",
+  "placeholder": true,
+  "_instructions": [
+    "公式の料金ページから 1M トークンあたりの USD 単価を転記し、placeholder を false にしてください。",
+    "version には転記元の改定日を入れます（例: 2026-07-01）。トレースにこの値が残るので、",
+    "単価改定後も過去のトレースを遡って正しく再計算できます。",
+    "記入するまで rates_for() は例外を投げ、policy.decide() はそれを BLOCK に変換します。",
+    "これは意図的な fail-closed です。単価 0 のまま動かすと予算超過を永久に検出できません。"
+  ],
+  "models": {
+    "<model-id>": {
+      "input": 0.0,
+      "cache_write": 0.0,
+      "cache_read": 0.0,
+      "output": 0.0
+    }
+  }
+}

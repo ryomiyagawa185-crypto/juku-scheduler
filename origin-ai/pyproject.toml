@@ -1,0 +1,22 @@
+[project]
+name = "origin-ai"
+version = "0.2.0"
+description = "宮川涼個人のAI基盤（推論層と実行層の権限分離・承認ゲート・費用とトレースの計装）"
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6.0",
+    "jsonschema>=4.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.setuptools]
+packages = ["origin_core", "policy", "orchestrator", "adapters"]

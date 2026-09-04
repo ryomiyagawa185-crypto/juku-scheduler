@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "origin-ai/schemas/approval.schema.json",
+  "title": "承認レコード",
+  "description": "承認は必ず target_hash（承認時点の内容ハッシュ）に束縛する。実行直前に再計算して不一致なら失効させ、再承認を求める。これが無いと『ドラフトAを承認 → 再生成でBになる → Bが送信される』が起きる。",
+  "type": "object",
+  "required": ["approval_id", "scope", "target_hash", "gate", "approver", "granted_at", "expires_at", "one_shot"],
+  "additionalProperties": false,
+  "properties": {
+    "approval_id": {"type": "string"},
+    "scope": {"enum": ["plan", "step", "tool_call"]},
+    "target_hash": {
+      "type": "string",
+      "description": "sha256:... 承認時点の inputs（外部送信なら本文を含む）の正規化ハッシュ"
+    },
+    "gate": {"type": "string"},
+    "approver": {"type": "string"},
+    "granted_at": {"type": "string"},
+    "expires_at": {"type": "string", "description": "既定は付与から1時間"},
+    "one_shot": {"type": "boolean", "description": "既定 true。1回消費したら無効"},
+    "consumed_at": {"type": ["string", "null"]},
+    "note": {"type": ["string", "null"]}
+  }
+}

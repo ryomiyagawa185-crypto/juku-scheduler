@@ -1,0 +1,46 @@
+name: skill-ci
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: origin-ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 依存の導入
+        run: pip install -e ".[dev]"
+
+      # 台帳が SKILL.md の生成物と一致しているか（手編集の検出）
+      - name: registry
+        run: python scripts/build_registry.py --check
+
+      # ゲート・fail-closed・承認束縛・経路パリティ。P1 の完了基準
+      - name: governance
+        run: pytest tests/governance -q
+
+      - name: cost
+        run: pytest tests/cost -q
+
+      - name: trace
+        run: pytest tests/trace -q
+
+      - name: smoke
+        run: pytest tests/test_p0_smoke.py -q
+
+      # スキル間 import の禁止（origin_core への依存は許可）
+      - name: skill independence
+        run: python scripts/check_skill_independence.py
+
+      # traces/ artifacts/{pii,privileged}/ の誤コミットと鍵の混入
+      - name: secret / pii scan
+        run: python scripts/scan_secrets_and_pii.py
+
+  # TODO(P4): eval を足したらここに決定的チェックのみの job を追加し、
+  # LLM-judge を含む全量は nightly に回す

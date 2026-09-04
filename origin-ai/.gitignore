@@ -1,0 +1,16 @@
+# 実行時の状態。git に載せない
+state/
+traces/
+
+# 成果物。分類で扱いが違う
+artifacts/pii/
+artifacts/privileged/
+artifacts/open/
+
+# 日次レポートは残してよいが、既定では追跡しない
+costs/
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
