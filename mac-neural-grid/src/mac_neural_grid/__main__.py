@@ -1,0 +1,9 @@
+# -*- coding: utf-8 -*-
+"""python -m mac_neural_grid のエントリポイント。"""
+
+import sys
+
+from .cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

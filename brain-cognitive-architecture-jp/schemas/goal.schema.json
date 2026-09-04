@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://miyagawa.local/brain-cognitive-architecture-jp/goal.schema.json",
+  "title": "Brain Cognitive Architecture — Goal",
+  "description": "正本は event log。memory/edge は派生 snapshot の要素。本ファイルは scripts/brain_architecture/schemas.py と同期（tests/unit/test_schemas_sync.py が検証）。",
+  "type": "object",
+  "required": [
+    "goal_id",
+    "description",
+    "scope"
+  ],
+  "properties": {
+    "goal_id": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "session",
+        "task",
+        "project",
+        "client",
+        "organization",
+        "user",
+        "machine",
+        "global"
+      ]
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "priority": {
+      "type": "number"
+    },
+    "risk_tolerance": {
+      "type": "number"
+    },
+    "created_at": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://miyagawa.local/brain-cognitive-architecture-jp/event.schema.json",
+  "title": "Brain Cognitive Architecture — Event (append-only truth)",
+  "description": "正本は event log。memory/edge は派生 snapshot の要素。本ファイルは scripts/brain_architecture/schemas.py と同期（tests/unit/test_schemas_sync.py が検証）。",
+  "type": "object",
+  "required": [
+    "event_id",
+    "kind",
+    "occurred_at",
+    "scope",
+    "source_trust",
+    "seq"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "observation",
+        "feedback",
+        "promotion",
+        "retraction",
+        "inhibition",
+        "note"
+      ]
+    },
+    "occurred_at": {
+      "type": "string"
+    },
+    "recorded_at": {
+      "type": "string"
+    },
+    "seq": {
+      "type": "integer"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "session",
+        "task",
+        "project",
+        "client",
+        "organization",
+        "user",
+        "machine",
+        "global"
+      ]
+    },
+    "partition": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source": {
+      "type": "string"
+    },
+    "source_trust": {
+      "type": "string",
+      "enum": [
+        "system_policy",
+        "user_explicit",
+        "user_confirmed",
+        "user_inferred",
+        "verified_local",
+        "verified_authoritative",
+        "untrusted_external",
+        "model_generated"
+      ]
+    },
+    "contains_sensitive_data": {
+      "type": "boolean"
+    },
+    "content_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "session_id_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "idempotent": {
+      "type": "boolean"
+    }
+  }
+}

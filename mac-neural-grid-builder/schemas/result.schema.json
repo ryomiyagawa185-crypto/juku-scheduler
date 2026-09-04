@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://miyagawa.local/mac-neural-grid/result.schema.json",
+  "title": "mac-neural-grid — Task Result",
+  "description": "src/mac_neural_grid/schemas.py と同期（tests が検証）。",
+  "type": "object",
+  "required": [
+    "task_id",
+    "status"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "assigned",
+        "running",
+        "succeeded",
+        "failed",
+        "retrying",
+        "cancel_requested",
+        "cancelled",
+        "timed_out",
+        "lost",
+        "quarantined"
+      ]
+    },
+    "exit_code": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "failure_class": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "transient",
+        "resource_exhaustion",
+        "node_offline",
+        "invalid_input",
+        "permission_denied",
+        "dependency_missing",
+        "policy_denied",
+        "deterministic_failure",
+        "unknown",
+        null
+      ]
+    },
+    "artifacts": {
+      "type": "array"
+    },
+    "stdout_excerpt": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stderr_excerpt": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "duration_s": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "node_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
